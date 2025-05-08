@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from arclet.cithun.node import NodeState
+from nonebot.compat import custom_validation
 from nonebot_plugin_orm.model import Model
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.schema import ForeignKey
@@ -35,6 +36,7 @@ class OwnerPermissionModel(Model):
     state: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+@custom_validation
 @dataclass(eq=True, unsafe_hash=True)
 class Owner:
     name: str
@@ -42,6 +44,16 @@ class Owner:
     nodes: dict[str, NodeState] = field(default_factory=dict, compare=False, hash=False)
     inherits: list = field(default_factory=list, compare=False, hash=False)
     wildcards: set[str] = field(default_factory=set, compare=False, hash=False)
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls._validate
+
+    @classmethod
+    def _validate(cls, value):
+        if isinstance(value, cls):
+            return value
+        raise ValueError(f"Expected Owner, got {type(value)}")
 
     def dump(self):
         main_model = OwnerModel(

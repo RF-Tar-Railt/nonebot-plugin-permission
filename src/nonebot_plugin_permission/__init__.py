@@ -33,6 +33,12 @@ __plugin_meta__ = PluginMetadata(
 SUPER_USER = monitor.predefine_owner("group:super_user", 0)
 
 
+@monitor.add_inherit_checker(SUPER_USER)
+def check_super_user(owner, *args):
+    user_id = owner.name.removeprefix("user:")
+    return user_id in global_config.superusers
+
+
 @driver.on_startup
 async def on_startup():
     await monitor.load()

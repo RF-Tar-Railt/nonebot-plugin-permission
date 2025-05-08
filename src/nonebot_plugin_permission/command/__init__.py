@@ -1,9 +1,11 @@
 from typing import Union
 
-from arclet.alconna import Alconna, Args, CommandMeta, Subcommand
+from arclet.alconna import Alconna, Args, CommandMeta, Option, Subcommand, store_true
 from arclet.cithun import PE, ROOT, NodeState
 from nonebot import get_driver, get_plugin_config, require
+from nonebot.adapters import Bot, Event
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
+from nonebot.typing import T_State
 
 require("nonebot_plugin_permission")
 require("nonebot_plugin_alconna")
@@ -41,6 +43,7 @@ cmd = Alconna(
     Args["user?", At],
     Subcommand("set", Args["permission", str]["state", Union[bool, str, int]]),
     Subcommand("get", Args["permission", str]),
+    Subcommand("inherit", Args["name", str], Option("cancel", action=store_true, default=False)),
     meta=CommandMeta("权限指令"),
 )
 
@@ -55,8 +58,8 @@ async def set_permission(permission: str, user: Match[At], state: Union[bool, st
         try:
             _state = NodeState(state)
         except ValueError:
-            await perm.finish(f"Invalid state: {state}")
-            return
+            await perm.send(f"Invalid state: {state}")
+            await perm.finish()
     available = _state.available
     if user.available:
         target_id = user.result.target
@@ -100,4 +103,37 @@ async def get_permission(permission: str, user: Match[At], current: UserOwner):
             await perm.finish(f"Permission {permission} not found")
 
 
+@perm.assign(
+    "inherit.cancel.value",
+    False,
+    parameterless=[depends_permission("command.permission.inherit", default_available=False)],
+)
+async def add_inherit(name: str, user: Match[At], current: UserOwner, bot: Bot, event: Event, state: T_State):
+    if name not in monitor.OWNER_TABLE:
+        await perm.finish(f"Owner {name} not found")
+    if user.available:
+        target_id = user.result.target
+        current = await monitor.get_or_new_owner(f"user:{target_id}")
+    if name in monitor.inherit_checker and not monitor.inherit_checker[name](current, bot, event, state):
+        await perm.finish(f"{current.name} inherit {name} failed")
+    await monitor.inherit(current, await monitor.get_or_new_owner(name))
+    await perm.finish(f"{current.name} inherit {name} success")
+
+
+@perm.assign(
+    "inherit.cancel.value",
+    True,
+    parameterless=[depends_permission("command.permission.inherit", default_available=False)],
+)
+async def cancel_inherit(name: str, user: Match[At], current: UserOwner):
+    if name not in monitor.OWNER_TABLE:
+        await perm.finish(f"Owner {name} not found")
+    if user.available:
+        target_id = user.result.target
+        current = await monitor.get_or_new_owner(f"user:{target_id}")
+    await monitor.cancel_inherit(current, await monitor.get_or_new_owner(name))
+    await perm.finish(f"{current.name} cancel inherit {name} success")
+
+
 ROOT.set(SUPER_USER, "command.permission.set", NodeState("vma"))
+ROOT.set(SUPER_USER, "command.permission.inherit", NodeState("vma"))

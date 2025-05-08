@@ -19,6 +19,8 @@ def require_permission(permission: str, default_available: bool = True, prompt: 
     monitor.add_default_permission(permission, NodeState("v-a") if default_available else NodeState("v--"))
 
     async def _check_permission(event: Event, bot: Bot):
+        if event.get_type() == "meta_event":
+            return False
         try:
             user = await monitor.get_or_new_owner(f"user:{event.get_user_id()}")
         except ValueError:

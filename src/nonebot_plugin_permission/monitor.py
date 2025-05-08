@@ -1,10 +1,12 @@
 import asyncio
 from collections.abc import Iterable
-from typing import Optional
+from typing import Callable, Optional
 
 from arclet.cithun import PE, NodeState
 from arclet.cithun.monitor import AsyncMonitor
 from arclet.cithun.node import NODE_DEPENDS, NODES
+from nonebot.adapters import Bot, Event
+from nonebot.typing import T_State
 from nonebot_plugin_orm import get_session
 from sqlalchemy.sql import select
 
@@ -25,6 +27,7 @@ class Monitor(AsyncMonitor):
     def __init__(self):
         self.OWNER_TABLE = {"group:default": Owner("group:default", 100)}
         self.predefined = {"group:default"}
+        self.inherit_checker = {}
         self.loaded = asyncio.Event()
 
     @property
@@ -57,7 +60,9 @@ class Monitor(AsyncMonitor):
                 if name not in self.OWNER_TABLE:
                     self.OWNER_TABLE[name] = owner
                 else:
-                    self.OWNER_TABLE[name].nodes.update(owner.nodes)
+                    self.OWNER_TABLE[name].nodes |= {
+                        k: v for k, v in owner.nodes.items() if k not in self.OWNER_TABLE[name].nodes
+                    }
                     self.OWNER_TABLE[name].inherits = list(set(self.OWNER_TABLE[name].inherits) | set(owner.inherits))
         self.loaded.set()
 
@@ -96,6 +101,14 @@ class Monitor(AsyncMonitor):
     async def get_or_new_group(self, group_id: str):
         return await self.get_or_new_owner(f"group:{group_id}")
 
+    def add_inherit_checker(self, source: Owner):
+
+        def wrapper(fn: Callable[[Owner, Bot, Event, T_State], bool]):
+            self.inherit_checker[source.name] = fn
+            return fn
+
+        return wrapper
+
     async def inherit(self, target: Owner, source: Owner, *sources: Owner):
         await self.loaded.wait()
         session = get_session()
@@ -117,7 +130,14 @@ class Monitor(AsyncMonitor):
         async with session:
             if source in target.inherits:
                 target.inherits.remove(source)
-                await session.delete(OwnerInheritsModel(owner_name=target.name, inherits_name=source.name))
+                instance = (
+                    await session.scalars(
+                        select(OwnerInheritsModel)
+                        .where(OwnerInheritsModel.owner_name == target.name)
+                        .where(OwnerInheritsModel.inherits_name == source.name)
+                    )
+                ).one()
+                await session.delete(instance)
                 await session.commit()
 
     async def all_owners(self) -> Iterable[Owner]:
