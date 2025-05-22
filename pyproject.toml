@@ -10,7 +10,7 @@ dependencies = [
     "nonebot-plugin-orm>=0.7.6",
     "arclet-cithun>=0.1.1",
     "nonebot-plugin-alconna>=0.57.4",
-    "nonebot-plugin-user>=0.4.4",
+    "nonebot-plugin-user>=0.5.0",
 ]
 requires-python = ">=3.9"
 readme = "README.md"

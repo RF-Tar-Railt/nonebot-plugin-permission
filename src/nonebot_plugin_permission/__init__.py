@@ -5,6 +5,7 @@ from nonebot import get_driver, get_plugin_config, load_plugin, require
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 
 require("nonebot_plugin_orm")
+require("nonebot_plugin_user")
 
 from . import migrations
 from .checker import depends_permission as depends_permission
@@ -14,7 +15,6 @@ from .monitor import monitor as monitor
 from .params import UserOwner as UserOwner
 
 driver = get_driver()
-global_config = driver.config
 _config = get_plugin_config(Config)
 
 __version__ = "0.1.0"
@@ -36,13 +36,13 @@ SUPER_USER = monitor.predefine_owner("group:super_user", 0)
 @monitor.add_inherit_checker(SUPER_USER)
 def check_super_user(owner, *args):
     user_id = owner.name.removeprefix("user:")
-    return user_id in global_config.superusers
+    return user_id in _config.permission_superusers
 
 
 @driver.on_startup
 async def on_startup():
     await monitor.load()
-    superusers = global_config.superusers
+    superusers = _config.permission_superusers
     for user in superusers:
         user = await monitor.get_or_new_owner(f"user:{user}")
         await monitor.inherit(user, SUPER_USER)
