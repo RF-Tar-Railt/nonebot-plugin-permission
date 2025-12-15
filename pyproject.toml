@@ -6,11 +6,12 @@ authors = [
     {name = "rf_tar_railt", email = "rf_tar_railt@qq.com"},
 ]
 dependencies = [
-    "nonebot2>=2.4.1",
+    "nonebot2>=2.4.4",
     "nonebot-plugin-orm>=0.7.6",
     "arclet-cithun>=1.2.0",
     "nonebot-plugin-alconna>=0.57.4",
     "nonebot-plugin-user>=0.5.0",
+    "nonebot-adapter-onebot>=2.4.6",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -73,9 +74,12 @@ disableBytesTypePromotions = true
 format = { composite = ["isort ./src/","black ./src/","ruff check ./src/"] }
 
 [tool.nonebot]
-adapters = [
-    { name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11" }
-]
-plugins = ["nonebot_plugin_permission"]
 plugin_dirs = []
 builtin_plugins = []
+[tool.nonebot.plugins]
+"@local" = ["nonebot_plugin_permission"]
+
+
+[tool.nonebot.adapters]
+"@local" = []
+nonebot-adapter-onebot = [{name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11"}]

@@ -1,4 +1,6 @@
 import asyncio
+from typing import Iterable
+
 from arclet.cithun.async_ import AsyncStore
 from arclet.cithun import Role, User, ResourceNode, InheritMode
 from arclet.cithun.model import AclEntry, Track, TrackLevel
@@ -24,17 +26,21 @@ class ORMStore(AsyncStore):
         self._predefine_users = []
         self._predefine_roles = [("$default", "Default")]
 
+        self._hooks = []
+
     async def create_user(self, uid: str, name: str) -> User:
         await self.loaded.wait()
         if uid in self.users:
             return self.users[uid]
-        async with get_session() as session, session.begin() as _:
-            user_model = UserModel(id=uid, name=name)
-            session.add(user_model)
-        user = user_model.dump()
-        self.users[uid] = user
-        await self.inherit(user, self.default_role)
-        return user
+        async with get_session() as session:
+            async with session.begin():
+                user_model = UserModel(id=uid, name=name)
+                session.add(user_model)
+            await session.refresh(user_model)
+            user = user_model.dump()
+            self.users[uid] = user
+            await self.inherit(user, self.default_role)
+            return user
 
     async def get_or_create_user(self, uid: str, name: str) -> User:
         await self.loaded.wait()
@@ -46,23 +52,27 @@ class ORMStore(AsyncStore):
         await self.loaded.wait()
         if rid in self.roles:
             return self.roles[rid]
-        async with get_session() as session, session.begin() as _:
-            role_model = RoleModel(id=rid, name=name)
-            session.add(role_model)
-        role = role_model.dump()
-        self.roles[rid] = role
-        return role
+        async with get_session() as session:
+            async with session.begin():
+                role_model = RoleModel(id=rid, name=name)
+                session.add(role_model)
+            await session.refresh(role_model)
+            role = role_model.dump()
+            self.roles[rid] = role
+            return role
 
     async def create_track(self, tid: str, name: str | None = None) -> Track:
         await self.loaded.wait()
         if tid in self.tracks:
             return self.tracks[tid]
-        async with get_session() as session, session.begin() as _:
-            track_model = TrackModel(id=tid, name=name or tid)
-            session.add(track_model)
-        track = track_model.dump()
-        self.tracks[tid] = track
-        return track
+        async with get_session() as session:
+            async with session.begin():
+                track_model = TrackModel(id=tid, name=name or tid)
+                session.add(track_model)
+            await session.refresh(track_model)
+            track = track_model.dump()
+            self.tracks[tid] = track
+            return track
 
     async def _add_resource(self, res: ResourceNode):
         await self.loaded.wait()
@@ -105,7 +115,7 @@ class ORMStore(AsyncStore):
 
     async def _add_acl(self, acl: AclEntry):
         await self.loaded.wait()
-        async with get_session() as session, session.begin() as _:
+        async with get_session() as session:
             target = await session.scalar(
                 select(AclEntryModel)
                 .where(AclEntryModel.subject_type == acl.subject_type)
@@ -114,10 +124,11 @@ class ORMStore(AsyncStore):
             )
             if target:
                 return
-            acl_model = AclEntryModel(
-                subject_type=acl.subject_type, subject_id=acl.subject_id, allow_mask=acl.allow_mask, deny_mask=acl.deny_mask,
-            )
-            session.add(acl_model)
+            async with session.begin_nested():
+                acl_model = AclEntryModel(
+                    subject_type=acl.subject_type, subject_id=acl.subject_id, resource_id=acl.resource_id, allow_mask=acl.allow_mask, deny_mask=acl.deny_mask,
+                )
+                session.add(acl_model)
             await session.refresh(acl_model)
             self.acls[acl_model.id] = acl
 
@@ -137,6 +148,29 @@ class ORMStore(AsyncStore):
             if target:
                 return self.acls[target.id]
 
+    async def get_acl(self, subject: User | Role, resource_id: str) -> list[AclEntry]:
+        await self.loaded.wait()
+        result = []
+        async with get_session() as session:
+            acls = (await session.scalars(
+                select(AclEntryModel)
+                .where(AclEntryModel.subject_type == subject.type)
+                .where(AclEntryModel.subject_id == subject.id)
+                .where(AclEntryModel.resource_id == resource_id)
+            )).all()
+            for acl_model in acls:
+                result.append(self.acls[acl_model.id])
+        return result
+
+    async def iter_acls_for_resource(self, resource_id: str) -> Iterable[AclEntry]:
+        await self.loaded.wait()
+        async with get_session() as session:
+            acls = (await session.scalars(
+                select(AclEntryModel)
+                .where(AclEntryModel.resource_id == resource_id)
+            )).all()
+            return (self.acls[acl_model.id] for acl_model in acls)
+
     async def depend(
         self,
         target_subject: User | Role,
@@ -146,7 +180,7 @@ class ORMStore(AsyncStore):
         required_mask: int,
     ) -> AclEntry:
         await self.loaded.wait()
-        async with get_session() as session, session.begin() as _:
+        async with get_session() as session:
             target = await session.scalar(
                 select(AclEntryModel)
                 .where(AclEntryModel.subject_type == target_subject.type)
@@ -157,18 +191,19 @@ class ORMStore(AsyncStore):
                 raise ValueError("Target ACL does not exist.")
             target_acl = self.acls[target.id]
             dep_res = await self.define(dep_resource_path)
-            dep_model = AclDependencyModel(
-                dep_subject_type=dep_subject.type,
-                dep_subject_id=dep_subject.id,
-                dep_resource_id=dep_res.id,
-                required_mask=required_mask,
-            )
-            dep = dep_model.dump()
-            if dep in target_acl.dependencies:
+            async with session.begin():
+                dep_model = AclDependencyModel(
+                    dep_subject_type=dep_subject.type,
+                    dep_subject_id=dep_subject.id,
+                    dep_resource_id=dep_res.id,
+                    required_mask=required_mask,
+                )
+                dep = dep_model.dump()
+                if dep in target_acl.dependencies:
+                    return target_acl
+                target_acl.dependencies.append(dep)
+                target.dependencies.append(dep_model)
                 return target_acl
-            target_acl.dependencies.append(dep)
-            target.dependencies.append(dep_model)
-            return target_acl
 
     async def inherit(self, child: User | Role, parent: Role):
         await self.loaded.wait()
@@ -188,6 +223,27 @@ class ORMStore(AsyncStore):
                     user_roles_model = UserRolesModel(user_id=user.id, role_id=parent.id)
                     session.add(user_roles_model)
                 user.role_ids.append(parent.id)
+
+    async def cancel_inherit(self, child: User | Role, parent: Role):
+        await self.loaded.wait()
+        if isinstance(child, Role):
+            child_role = self._ensure_role(child)
+            self._ensure_role(parent)
+            if parent.id in child_role.parent_role_ids:
+                async with get_session() as session, session.begin() as _:
+                    role_inherit_model = await session.get(RoleInheritsModel, (child_role.id, parent.id))
+                    if role_inherit_model:
+                        await session.delete(role_inherit_model)
+                child_role.parent_role_ids.remove(parent.id)
+        else:
+            user = self._ensure_user(child)
+            self._ensure_role(parent)
+            if parent.id in user.role_ids:
+                async with get_session() as session, session.begin() as _:
+                    user_roles_model = await session.get(UserRolesModel, (user.id, parent.id))
+                    if user_roles_model:
+                        await session.delete(user_roles_model)
+                user.role_ids.remove(parent.id)
 
     async def add_track_level(self, track: Track, role: Role, name: str | None = None) -> None:
         await self.loaded.wait()
@@ -228,6 +284,30 @@ class ORMStore(AsyncStore):
                 level_name=level.level_name,
             )
             session.add(track_level_model)
+
+    async def remove_track_level(self, track: Track, role: Role) -> None:
+        await self.loaded.wait()
+        level = TrackLevel(role.id, role.name)
+        if level not in track.levels:
+            return
+        level_index = track.levels.index(level)
+        track.levels.remove(level)
+        async with get_session() as session, session.begin() as _:
+            level_model = await session.scalar(
+                select(TrackLevelModel)
+                .where(TrackLevelModel.track_id == track.id)
+                .where(TrackLevelModel.role_id == role.id)
+            )
+            if level_model:
+                await session.delete(level_model)
+            levels_to_update = (await session.scalars(
+                select(TrackLevelModel)
+                .where(TrackLevelModel.track_id == track.id)
+                .where(TrackLevelModel.index > level_index)
+            )).all()
+            for lvl in levels_to_update:
+                lvl.index -= 1
+                session.add(lvl)
 
     async def set_user_track_level(self, user: User, track: Track, level_index: int) -> None:
         """将用户在某个 Track 上设置到指定等级。
@@ -284,7 +364,7 @@ class ORMStore(AsyncStore):
                 acl.deny_mask = deny_mask
 
     async def load(self):
-        async with get_session() as session, session.begin() as _:
+        async with get_session() as session:
             users = (await session.scalars(select(UserModel))).all()
             for user_model in users:
                 user = user_model.dump()
@@ -327,6 +407,8 @@ class ORMStore(AsyncStore):
         for rid, name in self._predefine_roles:
             if rid not in self.roles:
                 await self.create_role(rid, name)
+        for hook in self._hooks:
+            await hook()
 
     def predefine(
         self,
@@ -346,3 +428,7 @@ class ORMStore(AsyncStore):
         role = Role(rid, name)
         self._predefine_roles.append((rid, name))
         return role
+
+    def on_loaded(self, func):
+        self._hooks.append(func)
+        return func

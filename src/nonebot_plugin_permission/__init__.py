@@ -35,7 +35,7 @@ async def on_startup():
     await system.load()
     superusers = _config.permission_superusers
     for user in superusers:
-        user = await system.get_or_create_user(user, user)
+        user = await system.get_or_create_user(f"user:{user}", user)
         await system.inherit(user, SUPER_USER)
 
 

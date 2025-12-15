@@ -1,7 +1,9 @@
-from typing import Union
+from typing import Union, Literal
 
 from arclet.alconna import Alconna, Args, CommandMeta, Option, Subcommand, store_true
-from arclet.cithun import PE, ROOT, NodeState
+from arclet.cithun import Permission
+from arclet.cithun.function import PermissionNotFoundError, PermissionDeniedError
+from nepattern import BasePattern, MatchMode, MatchFailed
 from nonebot import get_driver, get_plugin_config, require
 from nonebot.adapters import Bot, Event
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
@@ -15,7 +17,7 @@ require("nonebot_plugin_uninfo")
 from nonebot_plugin_alconna import At, Match, on_alconna
 from nonebot_plugin_user import get_user
 from nonebot_plugin_uninfo import Uninfo
-from nonebot_plugin_permission import SUPER_USER, UserOwner, depends_permission, monitor
+from nonebot_plugin_permission import SUPER_USER, UserOwner, depends_permission, system
 
 from .config import Config
 
@@ -41,12 +43,40 @@ __plugin_meta__ = PluginMetadata(
     },
 )
 
+
+
+class PermissionPattern(BasePattern[Permission, str, Literal[MatchMode.TYPE_CONVERT]]):
+    def match(self, input_):
+        if not isinstance(input_, str):
+            raise MatchFailed(f"Expected str, got {type(input_)}")
+        if input_.lower() in ["true", "false"]:
+            return Permission("v-a" if input_.lower() == "true" else "v--")
+        try:
+            return Permission(int(input_) if input_.isdigit() else input_)
+        except ValueError:
+            raise MatchFailed(f"Invalid permission format: {input_}")
+
+
+state_pattern = PermissionPattern(mode=MatchMode.TYPE_CONVERT, origin=Permission, accepts=str, alias="bool | [0-7] | [vma]")
+
 cmd = Alconna(
     f"{_config.permission_command_name}",
     Args["user?", At],
-    Subcommand("set", Args["permission", str]["state", Union[bool, str, int]]),
+    Subcommand("set", Args["permission", str]["state", state_pattern]),
     Subcommand("get", Args["permission", str]),
     Subcommand("inherit", Args["name", str], Option("cancel", action=store_true, default=False)),
+    Subcommand("promote", Args["track", str]),
+    Subcommand("demote", Args["track", str]),
+    Subcommand(
+        "track",
+        Args["track", str],
+        Subcommand("info"),
+        Subcommand("append", Args["role", str]),
+        Subcommand("insert", Args["role", str]["index", int]),
+        Subcommand("remove", Args["role", str]),
+        Subcommand("clear"),
+        Subcommand("rename", Args["name", str]),
+    ),
     meta=CommandMeta("权限指令"),
 )
 
@@ -54,55 +84,47 @@ perm = on_alconna(cmd, comp_config={})
 
 
 @perm.assign("set", parameterless=[depends_permission("command.permission.set", default_available=False)])
-async def set_permission(permission: str, user: Match[At], state: Union[bool, str, int], current: UserOwner, session: Uninfo):
-    if isinstance(state, bool):
-        _state = NodeState("v-a" if state else "v--")
-    else:
-        try:
-            _state = NodeState(state)
-        except ValueError:
-            await perm.send(f"Invalid state: {state}")
-            await perm.finish()
-    available = _state.available
+async def set_permission(permission: str, user: Match[At], state: Permission, current: UserOwner, session: Uninfo, event, bot):
+    available = state & Permission.AVAILABLE == Permission.AVAILABLE
     if user.available:
         target_user = await get_user(session.scope, user.result.target)
-        _target = await monitor.get_or_new_owner(f"user:{target_user.id}")
+        _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
         try:
-            PE(current).set(_target, permission, _state)
+            await system.set(current, _target, permission, state, context={"event": event, "bot": bot})
             await perm.finish(f"Permission {permission} {'enabled' if available else 'disabled'} for user:{target_user.id}")
-        except FileNotFoundError:
+        except PermissionNotFoundError:
             await perm.finish(f"Permission {permission} not found")
-        except PermissionError as e:
+        except PermissionDeniedError as e:
             await perm.finish(str(e))
     else:
         try:
-            PE.root.set(current, permission, _state)
+            await system.suset(current, permission, state)
             await perm.finish(f"Permission {permission} {'enabled' if available else 'disabled'} for {current.name}")
-        except FileNotFoundError:
+        except PermissionNotFoundError:
             await perm.finish(f"Permission {permission} not found")
 
 
 @perm.assign("get", parameterless=[depends_permission("command.permission.get")])
-async def get_permission(permission: str, user: Match[At], current: UserOwner, session: Uninfo):
+async def get_permission(permission: str, user: Match[At], current: UserOwner, session: Uninfo, event, bot):
     if user.available:
         target_user = await get_user(session.scope, user.result.target)
-        _target = await monitor.get_or_new_owner(f"user:{target_user.id}")
+        _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
         try:
-            state = PE(current).get(_target, permission)
+            state = await system.get(_target, permission, context={"event": event, "bot": bot})
             await perm.finish(
-                f"Permission {permission} for user:{target_user.id} is {'enabled' if state.available else 'disabled'}"
+                f"Permission {permission} for user:{target_user.id} is {state!r}"
             )
-        except FileNotFoundError:
+        except PermissionNotFoundError:
             await perm.finish(f"Permission {permission} not found")
-        except PermissionError as e:
+        except PermissionDeniedError as e:
             await perm.finish(str(e))
     else:
         try:
-            state = PE.root.get(current, permission)
+            state = await system.get(current, permission, context={"event": event, "bot": bot})
             await perm.finish(
-                f"Permission {permission} for {current.name} is {'enabled' if state.available else 'disabled'}"
+                f"Permission {permission} for {current.name} is {state!r}"
             )
-        except FileNotFoundError:
+        except PermissionNotFoundError:
             await perm.finish(f"Permission {permission} not found")
 
 
@@ -112,14 +134,10 @@ async def get_permission(permission: str, user: Match[At], current: UserOwner, s
     parameterless=[depends_permission("command.permission.inherit", default_available=False)],
 )
 async def add_inherit(name: str, user: Match[At], current: UserOwner, bot: Bot, event: Event, state: T_State, session: Uninfo):
-    if name not in monitor.OWNER_TABLE:
-        await perm.finish(f"Owner {name} not found")
     if user.available:
         target_user = await get_user(session.scope, user.result.target)
-        current = await monitor.get_or_new_owner(f"user:{target_user.id}")
-    if name in monitor.inherit_checker and not monitor.inherit_checker[name](current, bot, event, state):
-        await perm.finish(f"{current.name} inherit {name} failed")
-    await monitor.inherit(current, await monitor.get_or_new_owner(name))
+        current = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
+    await system.inherit(current, await system.get_role(name))
     await perm.finish(f"{current.name} inherit {name} success")
 
 
@@ -129,14 +147,21 @@ async def add_inherit(name: str, user: Match[At], current: UserOwner, bot: Bot, 
     parameterless=[depends_permission("command.permission.inherit", default_available=False)],
 )
 async def cancel_inherit(name: str, user: Match[At], current: UserOwner, session: Uninfo):
-    if name not in monitor.OWNER_TABLE:
-        await perm.finish(f"Owner {name} not found")
     if user.available:
         target_user = await get_user(session.scope, user.result.target)
-        current = await monitor.get_or_new_owner(f"user:{target_user.id}")
-    await monitor.cancel_inherit(current, await monitor.get_or_new_owner(name))
+        current = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
+    await system.cancel_inherit(current, await system.get_role(name))
     await perm.finish(f"{current.name} cancel inherit {name} success")
 
 
-ROOT.set(SUPER_USER, "command.permission.set", NodeState("vma"))
-ROOT.set(SUPER_USER, "command.permission.inherit", NodeState("vma"))
+# ROOT.set(SUPER_USER, "command.permission.set", NodeState("vma"))
+# ROOT.set(SUPER_USER, "command.permission.inherit", NodeState("vma"))
+
+@system.on_loaded
+async def _():
+    @system.attach("command.permission")
+    async def _(*args):
+        return Permission(7)
+
+    await system.suset(SUPER_USER, "command.permission.set", Permission("vma"))
+    await system.suset(SUPER_USER, "command.permission.get", Permission("vma"))

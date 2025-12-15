@@ -1,7 +1,5 @@
 import asyncio
 from collections.abc import Callable
-from functools import reduce
-from operator import or_
 from typing import TypedDict, TypeAlias, TypeVar, Awaitable, overload
 from arclet.cithun.async_ import AsyncPermissionExecutor, AsyncPermissionEngine, AsyncPermissionService
 from arclet.cithun import Role, User, ResourceNode
@@ -43,8 +41,10 @@ class System(ORMStore, AsyncPermissionService[Context], AsyncPermissionExecutor[
                 tasks.append(func(user, resource.id, context, current_mask, permission_lookup))
         if not tasks:
             return current_mask
-        results = await asyncio.gather(*tasks)
-        return reduce(or_, results, 0)
+        for task in asyncio.as_completed(tasks):
+            result = await task
+            current_mask |= result
+        return current_mask
 
     @overload
     def attach(self, pattern: str) -> Callable[[TAttach], TAttach]: ...
