@@ -1,10 +1,10 @@
-from arclet.cithun import PE, NodeState, define
+from arclet.cithun import Permission
 from nonebot.adapters import Bot, Event
 from nonebot.params import Depends
 from nonebot_plugin_uninfo import Uninfo
 from nonebot_plugin_user.utils import get_user
 
-from .monitor import monitor
+from .main import system
 
 
 def require_permission(permission: str, default_available: bool = True, prompt: bool = False):
@@ -17,18 +17,21 @@ def require_permission(permission: str, default_available: bool = True, prompt: 
         prompt (bool): 是否提示
     """
 
-    define(permission)
-    monitor.add_default_permission(permission, NodeState("v-a") if default_available else NodeState("v--"))
+    system.predefine(permission)
+
+    @system.attach(permission)
+    async def _(*args):
+        return Permission("v-a") if default_available else Permission("v--")
 
     async def _check_permission(event: Event, bot: Bot, sess: Uninfo):
         if event.get_type() == "meta_event":
             return False
         try:
             user_model = await get_user(sess.scope, sess.user.id)
-            user = await monitor.get_or_new_owner(f"user:{user_model.id}")
+            user = await system.get_or_create_user(str(user_model.id), user_model.name)
         except ValueError:
             return False
-        if PE.root.get(user, permission).available:
+        if await system.has_permission(user, permission, Permission.AVAILABLE, context={"event": event, "bot": bot}):
             return True
         if prompt:
             await bot.send(event, f"Permission denied: {permission}")

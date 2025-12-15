@@ -1,6 +1,3 @@
-from arclet.cithun import NodeState as NodeState
-from arclet.cithun import PE as PE
-from arclet.cithun import ROOT as ROOT
 from nonebot import get_driver, get_plugin_config, load_plugin, require
 from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 
@@ -11,7 +8,7 @@ from . import migrations
 from .checker import depends_permission as depends_permission
 from .checker import require_permission as require_permission
 from .config import Config
-from .monitor import monitor as monitor
+from .main import system as system
 from .params import UserOwner as UserOwner
 
 driver = get_driver()
@@ -30,27 +27,16 @@ __plugin_meta__ = PluginMetadata(
 )
 
 
-SUPER_USER = monitor.predefine_owner("group:super_user", 0)
-
-
-@monitor.add_inherit_checker(SUPER_USER)
-def check_super_user(owner, *args):
-    user_id = owner.name.removeprefix("user:")
-    return user_id in _config.permission_superusers
+SUPER_USER = system.pre_role("SUPER_USER", "super_user")
 
 
 @driver.on_startup
 async def on_startup():
-    await monitor.load()
+    await system.load()
     superusers = _config.permission_superusers
     for user in superusers:
-        user = await monitor.get_or_new_owner(f"user:{user}")
-        await monitor.inherit(user, SUPER_USER)
-
-
-@driver.on_shutdown
-async def on_shutdown():
-    await monitor.save()
+        user = await system.get_or_create_user(user, user)
+        await system.inherit(user, SUPER_USER)
 
 
 if _config.permission_load_command:

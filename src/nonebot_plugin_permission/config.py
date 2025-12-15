@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class Config(BaseModel):
-    permission_load_command: bool = True
+    permission_load_command: bool = False
     """是否加载权限命令"""
 
     permission_superusers: set[str] = set()
