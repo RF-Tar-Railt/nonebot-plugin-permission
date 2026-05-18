@@ -1,10 +1,10 @@
 from arclet.cithun import DependencyCycleError as DependencyCycleError  # noqa: F401
-from arclet.cithun import PermissionDeniedError as PermissionDeniedError  # noqa: F401
-from arclet.cithun import ResourceNotFoundError as ResourceNotFoundError  # noqa: F401
-from arclet.cithun import PermissionExecutor as PermissionExecutor  # noqa: F401
 from arclet.cithun import InheritMode as InheritMode  # noqa: F401
 from arclet.cithun import Permission as Permission  # noqa: F401
+from arclet.cithun import PermissionDeniedError as PermissionDeniedError  # noqa: F401
+from arclet.cithun import PermissionExecutor as PermissionExecutor  # noqa: F401
 from arclet.cithun import ResourceNode as ResourceNode  # noqa: F401
+from arclet.cithun import ResourceNotFoundError as ResourceNotFoundError  # noqa: F401
 from arclet.cithun import Role as CithunRole  # noqa: F401
 from arclet.cithun import User as CithunUser  # noqa: F401
 from nonebot import get_driver, get_plugin_config, load_plugin, require
@@ -23,7 +23,7 @@ from .params import UserOwner as UserOwner
 driver = get_driver()
 _config = get_plugin_config(Config)
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __plugin_meta__ = PluginMetadata(
     name="Permission",
     description="权限实现",

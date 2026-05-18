@@ -1,5 +1,3 @@
-from typing import Optional
-
 from arclet.cithun.model import (
     AclDependency,
     AclEntry,
@@ -47,7 +45,7 @@ class RoleInheritsModel(Model):
 class ResourceModel(Model):
     id: Mapped[str] = mapped_column(String(256), primary_key=True)
     name: Mapped[str] = mapped_column(String(256), nullable=False)
-    parent_id: Mapped[Optional[str]] = mapped_column(
+    parent_id: Mapped[str | None] = mapped_column(
         ForeignKey("nonebot_plugin_permission_resourcemodel.id", ondelete="CASCADE"), nullable=True
     )
     inherit_mode: Mapped[InheritMode] = mapped_column(String(32), nullable=False, default=InheritMode.MERGE.value)

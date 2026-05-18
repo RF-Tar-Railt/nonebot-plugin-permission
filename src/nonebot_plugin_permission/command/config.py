@@ -1,12 +1,10 @@
-from typing import Optional
-
 from pydantic import BaseModel
 
 
 class Config(BaseModel):
     """Plugin Config Here"""
 
-    permission_command_start: Optional[set[str]] = None
+    permission_command_start: set[str] | None = None
     """插件使用的命令前缀，如果不填则使用全局命令前缀 (COMMAND_START)"""
 
     permission_command_name: str = "permission"

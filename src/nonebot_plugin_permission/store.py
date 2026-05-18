@@ -1,6 +1,6 @@
 import asyncio
+from collections.abc import Callable, Iterable
 from re import Pattern
-from typing import Callable, Iterable
 
 from arclet.cithun import InheritMode, ResourceNode, Role, User
 from arclet.cithun.async_ import AsyncStore

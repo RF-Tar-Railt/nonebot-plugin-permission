@@ -1,6 +1,6 @@
 import asyncio
-from collections.abc import Callable
-from typing import Awaitable, TypeAlias, TypedDict, TypeVar, overload
+from collections.abc import Awaitable, Callable
+from typing import TypeAlias, TypedDict, TypeVar, overload
 
 from arclet.cithun import Permission, ResourceNode, Role, User
 from arclet.cithun.async_ import AsyncPermissionEngine, AsyncPermissionExecutor, AsyncPermissionService
