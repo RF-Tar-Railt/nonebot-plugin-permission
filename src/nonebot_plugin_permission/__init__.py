@@ -23,7 +23,7 @@ from .params import UserOwner as UserOwner
 driver = get_driver()
 _config = get_plugin_config(Config)
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __plugin_meta__ = PluginMetadata(
     name="Permission",
     description="权限实现",
@@ -31,7 +31,7 @@ __plugin_meta__ = PluginMetadata(
     homepage="https://github.com/RF-Tar-Railt/nonebot-plugin-permission",
     type="application",
     config=Config,
-    supported_adapters=inherit_supported_adapters("nonebot_plugin_orm"),
+    supported_adapters=inherit_supported_adapters("nonebot_plugin_orm", "nonebot_plugin_user"),
     extra={"author": "RF-Tar-Railt", "priority": 3, "version": __version__, "orm_version_location": migrations},
 )
 
