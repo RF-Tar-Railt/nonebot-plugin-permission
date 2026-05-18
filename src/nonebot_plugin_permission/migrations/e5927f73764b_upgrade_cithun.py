@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 from sqlalchemy.dialects import sqlite
 
 revision: str = "e5927f73764b"
@@ -34,41 +34,31 @@ def upgrade(name: str = "") -> None:
         sa.ForeignKeyConstraint(
             ["parent_id"],
             ["nonebot_plugin_permission_resourcemodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_resourcemodel_parent_id_nonebot_plugin_permission_resourcemodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_resourcemodel_parent_id_nonebot_plugin_permission_resourcemodel"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_nonebot_plugin_permission_resourcemodel")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nonebot_plugin_permission_resourcemodel")),
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.create_table(
         "nonebot_plugin_permission_rolemodel",
         sa.Column("id", sa.String(length=64), nullable=False),
         sa.Column("name", sa.String(length=256), nullable=False),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_nonebot_plugin_permission_rolemodel")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nonebot_plugin_permission_rolemodel")),
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.create_table(
         "nonebot_plugin_permission_trackmodel",
         sa.Column("id", sa.String(length=256), nullable=False),
         sa.Column("name", sa.String(length=256), nullable=False),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_nonebot_plugin_permission_trackmodel")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nonebot_plugin_permission_trackmodel")),
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.create_table(
         "nonebot_plugin_permission_usermodel",
         sa.Column("id", sa.String(length=64), nullable=False),
         sa.Column("name", sa.String(length=256), nullable=False),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_nonebot_plugin_permission_usermodel")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nonebot_plugin_permission_usermodel")),
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.create_table(
@@ -82,14 +72,10 @@ def upgrade(name: str = "") -> None:
         sa.ForeignKeyConstraint(
             ["resource_id"],
             ["nonebot_plugin_permission_resourcemodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_aclentrymodel_resource_id_nonebot_plugin_permission_resourcemodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_aclentrymodel_resource_id_nonebot_plugin_permission_resourcemodel"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_nonebot_plugin_permission_aclentrymodel")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nonebot_plugin_permission_aclentrymodel")),
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.create_table(
@@ -107,9 +93,7 @@ def upgrade(name: str = "") -> None:
         sa.ForeignKeyConstraint(
             ["role_id"],
             ["nonebot_plugin_permission_rolemodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_roleinheritsmodel_role_id_nonebot_plugin_permission_rolemodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_roleinheritsmodel_role_id_nonebot_plugin_permission_rolemodel"),
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint(
@@ -128,17 +112,13 @@ def upgrade(name: str = "") -> None:
         sa.ForeignKeyConstraint(
             ["role_id"],
             ["nonebot_plugin_permission_rolemodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_tracklevelmodel_role_id_nonebot_plugin_permission_rolemodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_tracklevelmodel_role_id_nonebot_plugin_permission_rolemodel"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["track_id"],
             ["nonebot_plugin_permission_trackmodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_tracklevelmodel_track_id_nonebot_plugin_permission_trackmodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_tracklevelmodel_track_id_nonebot_plugin_permission_trackmodel"),
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint(
@@ -155,17 +135,13 @@ def upgrade(name: str = "") -> None:
         sa.ForeignKeyConstraint(
             ["role_id"],
             ["nonebot_plugin_permission_rolemodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_userrolesmodel_role_id_nonebot_plugin_permission_rolemodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_userrolesmodel_role_id_nonebot_plugin_permission_rolemodel"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],
             ["nonebot_plugin_permission_usermodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_userrolesmodel_user_id_nonebot_plugin_permission_usermodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_userrolesmodel_user_id_nonebot_plugin_permission_usermodel"),
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint(
@@ -186,9 +162,7 @@ def upgrade(name: str = "") -> None:
         sa.ForeignKeyConstraint(
             ["acl_id"],
             ["nonebot_plugin_permission_aclentrymodel.id"],
-            name=op.f(
-                "fk_nonebot_plugin_permission_acldependencymodel_acl_id_nonebot_plugin_permission_aclentrymodel"
-            ),
+            name=op.f("fk_nonebot_plugin_permission_acldependencymodel_acl_id_nonebot_plugin_permission_aclentrymodel"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
@@ -199,9 +173,7 @@ def upgrade(name: str = "") -> None:
             ),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint(
-            "id", name=op.f("pk_nonebot_plugin_permission_acldependencymodel")
-        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_nonebot_plugin_permission_acldependencymodel")),
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.drop_table("nonebot_plugin_permission_ownerpermissionmodel")
@@ -220,9 +192,7 @@ def downgrade(name: str = "") -> None:
         "nonebot_plugin_permission_permissionmodel",
         sa.Column("name", sa.VARCHAR(length=512), nullable=False),
         sa.Column("subs", sqlite.JSON(), nullable=False),
-        sa.PrimaryKeyConstraint(
-            "name", name="pk_nonebot_plugin_permission_permissionmodel"
-        ),
+        sa.PrimaryKeyConstraint("name", name="pk_nonebot_plugin_permission_permissionmodel"),
     )
     op.create_table(
         "nonebot_plugin_permission_ownerinheritsmodel",
@@ -261,9 +231,7 @@ def downgrade(name: str = "") -> None:
         "nonebot_plugin_permission_dependencymodel",
         sa.Column("name", sa.VARCHAR(length=512), nullable=False),
         sa.Column("subs", sqlite.JSON(), nullable=False),
-        sa.PrimaryKeyConstraint(
-            "name", name=op.f("pk_nonebot_plugin_permission_dependencymodel")
-        ),
+        sa.PrimaryKeyConstraint("name", name=op.f("pk_nonebot_plugin_permission_dependencymodel")),
     )
     op.create_table(
         "nonebot_plugin_permission_ownerpermissionmodel",

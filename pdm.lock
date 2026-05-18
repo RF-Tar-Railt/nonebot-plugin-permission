@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:6930a3f342344823caada81d91120458b90222c7b4e58953f92101765e5a19dd"
+content_hash = "sha256:bf44aa24c90d5ed01f76b90c18e968b161c0b75c8b5063b92796c7bcc35e9693"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -115,13 +115,13 @@ files = [
 
 [[package]]
 name = "arclet-cithun"
-version = "1.2.0"
+version = "1.3.0"
 requires_python = ">=3.10"
 summary = "A permission system modeled on the file permission system under Unix."
 groups = ["default"]
 files = [
-    {file = "arclet_cithun-1.2.0-py3-none-any.whl", hash = "sha256:c85a9685dc32e17c9670a5e73045cd497e0c1bd74668f3ecf5fd58116d30306e"},
-    {file = "arclet_cithun-1.2.0.tar.gz", hash = "sha256:407425ccaa41c7f0b571b1ddfe160cd0f52af39b41745a668cef8dce8c31e445"},
+    {file = "arclet_cithun-1.3.0-py3-none-any.whl", hash = "sha256:2d4df998708e87a8efa4deace8a6942ce25ee4c4736dee41231f86f140089b3f"},
+    {file = "arclet_cithun-1.3.0.tar.gz", hash = "sha256:031685d47921b23cfbf688ad3cd9484c1fc82e831eb9e67b7622ad7cf291da61"},
 ]
 
 [[package]]
@@ -617,7 +617,7 @@ name = "msgpack"
 version = "1.1.2"
 requires_python = ">=3.9"
 summary = "MessagePack serializer"
-groups = ["dev"]
+groups = ["default", "dev"]
 files = [
     {file = "msgpack-1.1.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0051fffef5a37ca2cd16978ae4f0aef92f164df86823871b5162812bebecd8e2"},
     {file = "msgpack-1.1.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:a605409040f2da88676e9c9e5853b3449ba8011973616189ea5ee55ddbc5bc87"},
@@ -846,7 +846,7 @@ name = "nonebot-adapter-onebot"
 version = "2.4.6"
 requires_python = "<4.0,>=3.9"
 summary = "OneBot(CQHTTP) adapter for nonebot2"
-groups = ["dev"]
+groups = ["default", "dev"]
 dependencies = [
     "msgpack<2.0.0,>=1.0.3",
     "nonebot2<3.0.0,>=2.2.0",

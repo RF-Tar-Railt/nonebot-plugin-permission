@@ -1,15 +1,25 @@
 import asyncio
-from typing import Iterable
+from re import Pattern
+from typing import Callable, Iterable
 
+from arclet.cithun import InheritMode, ResourceNode, Role, User
 from arclet.cithun.async_ import AsyncStore
-from arclet.cithun import Role, User, ResourceNode, InheritMode
-from arclet.cithun.model import AclEntry, Track, TrackLevel
-
+from arclet.cithun.model import AclEntry, Permission, Track, TrackLevel
 from nonebot_plugin_orm import get_session
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import select
 
-from .model import UserModel, RoleModel, TrackModel, UserRolesModel, RoleInheritsModel, ResourceModel, AclEntryModel, AclDependencyModel, TrackLevelModel
+from .model import (
+    AclDependencyModel,
+    AclEntryModel,
+    ResourceModel,
+    RoleInheritsModel,
+    RoleModel,
+    TrackLevelModel,
+    TrackModel,
+    UserModel,
+    UserRolesModel,
+)
 
 
 class ORMStore(AsyncStore):
@@ -17,16 +27,23 @@ class ORMStore(AsyncStore):
         self.loaded = asyncio.Event()
         self.resources: dict[str, ResourceNode] = {}
         self.users: dict[str, User] = {}
-        self.roles: dict[str, Role] = {}
+        self.roles: dict[str, Role] = {"group:default": Role("group:default", "Default")}
         self.acls: dict[int, AclEntry] = {}
         self.tracks: dict[str, Track] = {}
-        self.default_role = Role("$default", "Default")
 
         self._predefine_resources = []
         self._predefine_users = []
-        self._predefine_roles = [("$default", "Default")]
+        self._predefine_roles = [("group:default", "Default")]
+        self._predefine_tracks = []
+        self._predefine_track_levels = []
+        self._predefine_assigns = []
+        self._predefine_depends = []
 
         self._hooks = []
+
+    @property
+    def default_role(self) -> Role:
+        return self.roles["group:default"]
 
     async def create_user(self, uid: str, name: str) -> User:
         await self.loaded.wait()
@@ -38,9 +55,9 @@ class ORMStore(AsyncStore):
                 session.add(user_model)
             await session.refresh(user_model)
             user = user_model.dump()
-            self.users[uid] = user
-            await self.inherit(user, self.default_role)
-            return user
+        self.users[uid] = user
+        await self.inherit(user, self.default_role)
+        return user
 
     async def get_or_create_user(self, uid: str, name: str) -> User:
         await self.loaded.wait()
@@ -57,9 +74,22 @@ class ORMStore(AsyncStore):
                 role_model = RoleModel(id=rid, name=name)
                 session.add(role_model)
             await session.refresh(role_model)
-            role = role_model.dump()
-            self.roles[rid] = role
+        role = role_model.dump()
+        self.roles[rid] = role
+        return role
+
+    async def get_role(self, rid: str) -> Role:
+        if rid in self.roles:
+            return self.roles[rid]
+        if f"group:{rid}" in self.roles:
+            return self.roles[f"group:{rid}"]
+        role = next(
+            (role for role in self.roles.values() if role.name == rid),
+            None,
+        )
+        if role:
             return role
+        raise KeyError(rid)
 
     async def create_track(self, tid: str, name: str | None = None) -> Track:
         await self.loaded.wait()
@@ -126,7 +156,11 @@ class ORMStore(AsyncStore):
                 return
             async with session.begin_nested():
                 acl_model = AclEntryModel(
-                    subject_type=acl.subject_type, subject_id=acl.subject_id, resource_id=acl.resource_id, allow_mask=acl.allow_mask, deny_mask=acl.deny_mask,
+                    subject_type=acl.subject_type,
+                    subject_id=acl.subject_id,
+                    resource_id=acl.resource_id,
+                    allow_mask=acl.allow_mask,
+                    deny_mask=acl.deny_mask,
                 )
                 session.add(acl_model)
             await session.refresh(acl_model)
@@ -152,12 +186,14 @@ class ORMStore(AsyncStore):
         await self.loaded.wait()
         result = []
         async with get_session() as session:
-            acls = (await session.scalars(
-                select(AclEntryModel)
-                .where(AclEntryModel.subject_type == subject.type)
-                .where(AclEntryModel.subject_id == subject.id)
-                .where(AclEntryModel.resource_id == resource_id)
-            )).all()
+            acls = (
+                await session.scalars(
+                    select(AclEntryModel)
+                    .where(AclEntryModel.subject_type == subject.type)
+                    .where(AclEntryModel.subject_id == subject.id)
+                    .where(AclEntryModel.resource_id == resource_id)
+                )
+            ).all()
             for acl_model in acls:
                 result.append(self.acls[acl_model.id])
         return result
@@ -165,10 +201,7 @@ class ORMStore(AsyncStore):
     async def iter_acls_for_resource(self, resource_id: str) -> Iterable[AclEntry]:
         await self.loaded.wait()
         async with get_session() as session:
-            acls = (await session.scalars(
-                select(AclEntryModel)
-                .where(AclEntryModel.resource_id == resource_id)
-            )).all()
+            acls = (await session.scalars(select(AclEntryModel).where(AclEntryModel.resource_id == resource_id))).all()
             return (self.acls[acl_model.id] for acl_model in acls)
 
     async def depend(
@@ -268,11 +301,13 @@ class ORMStore(AsyncStore):
             return
         track.levels.insert(index, level)
         async with get_session() as session, session.begin() as _:
-            levels_to_update = (await session.scalars(
-                select(TrackLevelModel)
-                .where(TrackLevelModel.track_id == track.id)
-                .where(TrackLevelModel.index >= index)
-            )).all()
+            levels_to_update = (
+                await session.scalars(
+                    select(TrackLevelModel)
+                    .where(TrackLevelModel.track_id == track.id)
+                    .where(TrackLevelModel.index >= index)
+                )
+            ).all()
             for lvl in levels_to_update:
                 lvl.index += 1
                 session.add(lvl)
@@ -300,11 +335,13 @@ class ORMStore(AsyncStore):
             )
             if level_model:
                 await session.delete(level_model)
-            levels_to_update = (await session.scalars(
-                select(TrackLevelModel)
-                .where(TrackLevelModel.track_id == track.id)
-                .where(TrackLevelModel.index > level_index)
-            )).all()
+            levels_to_update = (
+                await session.scalars(
+                    select(TrackLevelModel)
+                    .where(TrackLevelModel.track_id == track.id)
+                    .where(TrackLevelModel.index > level_index)
+                )
+            ).all()
             for lvl in levels_to_update:
                 lvl.index -= 1
                 session.add(lvl)
@@ -334,18 +371,20 @@ class ORMStore(AsyncStore):
         if levels[level_index].role_id not in user.role_ids:
             user.role_ids.append(levels[level_index].role_id)
         async with get_session() as session, session.begin() as _:
-            user_roles_to_delete = (await session.scalars(
-                select(UserRolesModel)
-                .where(UserRolesModel.user_id == user.id)
-                .where(UserRolesModel.role_id.in_(track_role_ids))
-            )).all()
+            user_roles_to_delete = (
+                await session.scalars(
+                    select(UserRolesModel)
+                    .where(UserRolesModel.user_id == user.id)
+                    .where(UserRolesModel.role_id.in_(track_role_ids))
+                )
+            ).all()
             for ur in user_roles_to_delete:
                 await session.delete(ur)
             new_role_id = levels[level_index].role_id
             user_roles_model = UserRolesModel(user_id=user.id, role_id=new_role_id)
             session.add(user_roles_model)
 
-    async def update_acl(self, acl: AclEntry, allow_mask: int, deny_mask: int | None = None) -> None:
+    async def update_acl(self, acl: AclEntry, allow_mask: Permission, deny_mask: Permission | None = None) -> None:
         await self.loaded.wait()
         async with get_session() as session, session.begin() as _:
             target = await session.scalar(
@@ -369,31 +408,31 @@ class ORMStore(AsyncStore):
             for user_model in users:
                 user = user_model.dump()
                 self.users[user.id] = user
-                role_ids = (await session.scalars(
-                    select(UserRolesModel.role_id).where(UserRolesModel.user_id == user.id)
-                )).all()
+                role_ids = (
+                    await session.scalars(select(UserRolesModel.role_id).where(UserRolesModel.user_id == user.id))
+                ).all()
                 user.role_ids.extend(role_ids)
             roles = (await session.scalars(select(RoleModel))).all()
             for role_model in roles:
                 role = role_model.dump()
                 self.roles[role.id] = role
-                parent_role_ids = (await session.scalars(
-                    select(RoleInheritsModel.parent_role_id).where(RoleInheritsModel.role_id == role.id)
-                )).all()
+                parent_role_ids = (
+                    await session.scalars(
+                        select(RoleInheritsModel.parent_role_id).where(RoleInheritsModel.role_id == role.id)
+                    )
+                ).all()
                 role.parent_role_ids.extend(parent_role_ids)
             resources = (await session.scalars(select(ResourceModel))).all()
             for resource_model in resources:
                 resource = resource_model.dump()
                 self.resources[resource.id] = resource
-            acls = (await session.scalars(select(AclEntryModel).options(
-                selectinload(AclEntryModel.dependencies)
-            ))).all()
+            acls = (
+                await session.scalars(select(AclEntryModel).options(selectinload(AclEntryModel.dependencies)))
+            ).all()
             for acl_model in acls:
                 acl = acl_model.dump()
                 self.acls[acl_model.id] = acl
-            tracks = (await session.scalars(select(TrackModel).options(
-                selectinload(TrackModel.levels)
-            ))).all()
+            tracks = (await session.scalars(select(TrackModel).options(selectinload(TrackModel.levels)))).all()
             for track_model in tracks:
                 track = track_model.dump()
                 self.tracks[track.id] = track
@@ -401,16 +440,46 @@ class ORMStore(AsyncStore):
         for path, inherit_mode, type_ in self._predefine_resources:
             if path not in self.resources:
                 await self.define(path, inherit_mode=inherit_mode, type_=type_)
-        for uid, name in self._predefine_users:
-            if uid not in self.users:
-                await self.create_user(uid, name)
         for rid, name in self._predefine_roles:
-            if rid not in self.roles:
-                await self.create_role(rid, name)
+            role = self.roles[rid]
+            async with get_session() as session:
+                model = RoleModel(id=rid, name=name)
+                await session.merge(model)
+                for parent_rid in role.parent_role_ids:
+                    parent_model = RoleInheritsModel(role_id=rid, parent_role_id=parent_rid)
+                    await session.merge(parent_model)
+                await session.commit()
+        for uid, name in self._predefine_users:
+            user = self.users[uid]
+            async with get_session() as session:
+                model = UserModel(id=uid, name=name)
+                await session.merge(model)
+                for rid in user.role_ids:
+                    user_role_model = UserRolesModel(user_id=uid, role_id=rid)
+                    await session.merge(user_role_model)
+                await session.commit()
+        for tid, name in self._predefine_tracks:
+            track = self.tracks[tid]
+            async with get_session() as session:
+                track_model = TrackModel(id=tid, name=name or tid)
+                await session.merge(track_model)
+                for index, level in enumerate(track.levels):
+                    level_model = TrackLevelModel(
+                        index=index,
+                        track_id=tid,
+                        role_id=level.role_id,
+                        level_name=level.level_name,
+                    )
+                    await session.merge(level_model)
+                await session.commit()
+        for subject, resource_path, allow_mask, deny_mask in self._predefine_assigns:
+            await self.assign(subject, resource_path, allow_mask, deny_mask)
+        for slot in self._predefine_depends:
+            await self.depend(*slot)
         for hook in self._hooks:
             await hook()
 
-    def predefine(
+    def pre_define(
         self,
         path: str,
         inherit_mode: InheritMode | None = None,
@@ -421,14 +490,47 @@ class ORMStore(AsyncStore):
     def pre_user(self, uid: str, name: str) -> User:
         user = User(uid, name)
         user.role_ids.append(self.default_role.id)
+        self.users[uid] = user
         self._predefine_users.append((uid, name))
         return user
 
     def pre_role(self, rid: str, name: str) -> Role:
         role = Role(rid, name)
         self._predefine_roles.append((rid, name))
+        self.roles[rid] = role
         return role
+
+    def pre_track(self, tid: str, name: str | None = None) -> Track:
+        track = Track(tid, name or tid)
+        self.tracks[tid] = track
+        self._predefine_tracks.append((tid, name))
+        return track
+
+    def pre_track_level(self, track: Track, role: Role, name: str | None = None) -> None:
+        level = TrackLevel(role.id, name or role.name)
+        track.levels.append(level)
 
     def on_loaded(self, func):
         self._hooks.append(func)
         return func
+
+    def pre_assign(
+        self,
+        subject: User | Role,
+        resource_path: str | Callable[[str], bool] | Pattern[str],
+        allow_mask: Permission,
+        deny_mask: Permission = Permission.NONE,
+    ):
+        self._predefine_assigns.append((subject, resource_path, allow_mask, deny_mask))
+
+    def pre_depend(
+        self,
+        target_subject: User | Role,
+        target_resource_path: str | Callable[[str], bool] | Pattern[str],
+        dep_subject: User | Role,
+        dep_resource_path: str | Callable[[str], bool] | Pattern[str],
+        required_mask: Permission,
+    ):
+        self._predefine_depends.append(
+            (target_subject, target_resource_path, dep_subject, dep_resource_path, required_mask)
+        )

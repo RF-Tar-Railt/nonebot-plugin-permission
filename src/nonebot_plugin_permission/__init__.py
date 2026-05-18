@@ -27,7 +27,7 @@ __plugin_meta__ = PluginMetadata(
 )
 
 
-SUPER_USER = system.pre_role("SUPER_USER", "super_user")
+SUPER_USER = system.pre_role("group:SUPER_USER", "SuperUser")
 
 
 @driver.on_startup

@@ -1,10 +1,11 @@
 import asyncio
 from collections.abc import Callable
-from typing import TypedDict, TypeAlias, TypeVar, Awaitable, overload
-from arclet.cithun.async_ import AsyncPermissionExecutor, AsyncPermissionEngine, AsyncPermissionService
-from arclet.cithun import Role, User, ResourceNode
+from typing import Awaitable, TypeAlias, TypedDict, TypeVar, overload
 
-from nonebot.adapters import Event, Bot
+from arclet.cithun import Permission, ResourceNode, Role, User
+from arclet.cithun.async_ import AsyncPermissionEngine, AsyncPermissionExecutor, AsyncPermissionService
+from nonebot.adapters import Bot, Event
+
 from .store import ORMStore
 
 
@@ -13,9 +14,15 @@ class Context(TypedDict):
     bot: Bot
 
 
-Attach: TypeAlias = Callable[[User, Context | None, int, Callable[[User | Role, Context | None], Awaitable[int]]], Awaitable[int]]
+Attach: TypeAlias = Callable[
+    [User, Context | None, Permission, Callable[[User | Role, Context | None], Awaitable[Permission]]],
+    Awaitable[Permission],
+]
 TAttach = TypeVar("TAttach", bound=Attach)
-Attach1: TypeAlias = Callable[[User, str, Context | None, int, Callable[[User | Role, Context | None], Awaitable[int]]], Awaitable[int]]
+Attach1: TypeAlias = Callable[
+    [User, str, Context | None, Permission, Callable[[User | Role, Context | None], Awaitable[Permission]]],
+    Awaitable[Permission],
+]
 TAttach1 = TypeVar("TAttach1", bound=Attach1)
 
 
@@ -32,9 +39,9 @@ class System(ORMStore, AsyncPermissionService[Context], AsyncPermissionExecutor[
         user: User,
         resource: ResourceNode,
         context: Context | None,
-        current_mask: int,
-        permission_lookup: Callable[[User | Role, Context | None], Awaitable[int]],
-    ) -> int:
+        current_mask: Permission,
+        permission_lookup: Callable[[User | Role, Context | None], Awaitable[Permission]],
+    ) -> Permission:
         tasks = []
         for pattern, func in self.attaches:
             if pattern(resource.id):
