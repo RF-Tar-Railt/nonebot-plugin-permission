@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-permission"
-version = "0.1.0"
+version = "0.1.1"
 description = "Permission Plugin based on Arclet Cithun"
 authors = [
     {name = "rf_tar_railt", email = "rf_tar_railt@qq.com"},

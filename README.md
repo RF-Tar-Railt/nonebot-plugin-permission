@@ -77,13 +77,13 @@ async def handle(owner: UserOwner):
 
 ```python
 from nonebot import on_command
-from nonebot_plugin_permission import UserOwner, ROOT, NodeState
+from nonebot_plugin_permission import UserOwner, Permission, system
 
 matcher = on_command("test")
 
 @matcher.handle()
 async def handle(owner: UserOwner):
-    state: NodeState = ROOT.get(owner, "command.test")
+    state: Permission = await system.get(owner, "command.test")
 ```
 
 ### 通过指令设置权限
@@ -95,13 +95,13 @@ permission [@user] set <permission> <state>
 ### 通过代码设置权限
 
 ```python
-from nonebot_plugin_permission import ROOT, NodeState, monitor
+from nonebot_plugin_permission import Permission, system
 
 @matcher.handle()
 async def _():
-    owner = await monitor.get_or_new_user("xxx")
+    owner = await system.get_or_create_user("xxx")
     # 设置权限
-    ROOT.set(owner, "command.test", NodeState("vma"))
+    await system.suset(owner, "command.test", Permission("vma"))
     # 取消权限
-    ROOT.set(owner, "command.test", NodeState("v--"))
+    await system.suset(owner, "command.test", Permission("v--"))
 ```
