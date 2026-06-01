@@ -159,8 +159,8 @@ class ORMStore(AsyncStore):
                     subject_type=acl.subject_type,
                     subject_id=acl.subject_id,
                     resource_id=acl.resource_id,
-                    allow_mask=acl.allow_mask,
-                    deny_mask=acl.deny_mask,
+                    allow_mask=int(acl.allow_mask),
+                    deny_mask=int(acl.deny_mask),
                 )
                 session.add(acl_model)
             await session.refresh(acl_model)
@@ -210,7 +210,7 @@ class ORMStore(AsyncStore):
         target_resource_id: str,
         dep_subject: User | Role,
         dep_resource_path: str,
-        required_mask: int,
+        required_mask: Permission,
     ) -> AclEntry:
         await self.loaded.wait()
         async with get_session() as session:
@@ -229,7 +229,7 @@ class ORMStore(AsyncStore):
                     dep_subject_type=dep_subject.type,
                     dep_subject_id=dep_subject.id,
                     dep_resource_id=dep_res.id,
-                    required_mask=required_mask,
+                    required_mask=int(required_mask),
                 )
                 dep = dep_model.dump()
                 if dep in target_acl.dependencies:

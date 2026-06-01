@@ -60,6 +60,7 @@ state_pattern = PermissionPattern(
 )
 
 cmd = Alconna(
+    [*(_config.permission_command_start or set())],
     f"{_config.permission_command_name}",
     Subcommand(
         "user",
@@ -86,7 +87,7 @@ cmd = Alconna(
     meta=CommandMeta("权限指令"),
 )
 
-perm = on_alconna(cmd, comp_config={})
+perm = on_alconna(cmd, comp_config={}, use_cmd_start=True if not _config.permission_command_start else None)
 perm.shortcut(
     r"chmod (?P<expr>(?:[ad])?(?:[=+-])?(?:[*0-7]|[vmarwx]+)) (?P<permission>.+)",
     prefix=True,
