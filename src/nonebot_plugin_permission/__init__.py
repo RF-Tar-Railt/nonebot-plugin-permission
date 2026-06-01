@@ -23,7 +23,7 @@ from .params import UserOwner as UserOwner
 driver = get_driver()
 _config = get_plugin_config(Config)
 
-__version__ = "0.1.4"
+__version__ = "0.2.0"
 __plugin_meta__ = PluginMetadata(
     name="Permission",
     description="权限实现",

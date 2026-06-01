@@ -10,11 +10,9 @@ from nonebot.plugin import PluginMetadata, inherit_supported_adapters
 require("nonebot_plugin_permission")
 require("nonebot_plugin_alconna")
 require("nonebot_plugin_user")
-require("nonebot_plugin_uninfo")
 
 from nonebot_plugin_alconna import At, Match, on_alconna
-from nonebot_plugin_uninfo import Uninfo
-from nonebot_plugin_user import get_user
+from nonebot_plugin_user import UserSession
 
 from nonebot_plugin_permission import SUPER_USER, UserOwner, depends_permission, system
 
@@ -23,7 +21,7 @@ from .config import Config
 driver = get_driver()
 global_config = driver.config
 _config = get_plugin_config(Config)
-__version__ = "0.5.0"
+__version__ = "0.2.0"
 __plugin_meta__ = PluginMetadata(
     name="Permission 附属指令",
     description="为权限系统提供附属指令",
@@ -34,7 +32,9 @@ __plugin_meta__ = PluginMetadata(
     homepage="https://github.com/RF-Tar-Railt/nonebot-plugin-permission",
     type="application",
     config=Config,
-    supported_adapters=inherit_supported_adapters("nonebot_plugin_alconna"),
+    supported_adapters=inherit_supported_adapters(
+        "nonebot_plugin_alconna", "nonebot_plugin_user", "nonebot_plugin_permission"
+    ),
     extra={
         "author": "RF-Tar-Railt",
         "priority": 3,
@@ -97,9 +97,9 @@ perm.shortcut(
 
 
 @perm.assign("user.list", parameterless=[depends_permission("command.permission.list")])
-async def list_permissions(user: Match[At], current: UserOwner, session: Uninfo):
+async def list_permissions(user: Match[At], current: UserOwner, session: UserSession):
     if user.available:
-        target_user = await get_user(session.scope, user.result.target)
+        target_user = session.user
         _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
     else:
         _target = current
@@ -117,7 +117,7 @@ async def set_permission(
     user: Match[At],
     state: tuple[Permission, str, bool],
     current: UserOwner,
-    session: Uninfo,
+    session: UserSession,
     event,
     bot,
 ):
@@ -126,10 +126,12 @@ async def set_permission(
     if mode == "-":
         available = not available
     if user.available:
-        target_user = await get_user(session.scope, user.result.target)
+        target_user = session.user
         _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
         try:
-            await system.set(current, _target, permission, mask, mode, deny, context={"event": event, "bot": bot})
+            await system.set(
+                current, _target, permission, mask, mode, deny, context={"event": event, "bot": bot, "session": session}
+            )
             await perm.finish(
                 f"Permission {permission} {'enabled' if available else 'disabled'} for user:{target_user.id}"
             )
@@ -146,12 +148,12 @@ async def set_permission(
 
 
 @perm.assign("user.get", parameterless=[depends_permission("command.permission.get")])
-async def get_permission(permission: str, user: Match[At], current: UserOwner, session: Uninfo, event, bot):
+async def get_permission(permission: str, user: Match[At], current: UserOwner, session: UserSession, event, bot):
     if user.available:
-        target_user = await get_user(session.scope, user.result.target)
+        target_user = session.user
         _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
         try:
-            state = await system.get(_target, permission, context={"event": event, "bot": bot})
+            state = await system.get(_target, permission, context={"event": event, "bot": bot, "session": session})
             await perm.finish(f"Permission {permission} for user:{target_user.id} is {Permission(state)!r}")
         except ResourceNotFoundError:
             await perm.finish(f"Permission {permission} not found")
@@ -159,7 +161,7 @@ async def get_permission(permission: str, user: Match[At], current: UserOwner, s
             await perm.finish(str(e))
     else:
         try:
-            state = await system.get(current, permission, context={"event": event, "bot": bot})
+            state = await system.get(current, permission, context={"event": event, "bot": bot, "session": session})
             await perm.finish(f"Permission {permission} for {current.name} is {Permission(state)!r}")
         except ResourceNotFoundError:
             await perm.finish(f"Permission {permission} not found")
@@ -170,9 +172,9 @@ async def get_permission(permission: str, user: Match[At], current: UserOwner, s
     False,
     parameterless=[depends_permission("command.permission.inherit", default_available=False)],
 )
-async def add_inherit(name: str, user: Match[At], current: UserOwner, session: Uninfo):
+async def add_inherit(name: str, user: Match[At], current: UserOwner, session: UserSession):
     if user.available:
-        target_user = await get_user(session.scope, user.result.target)
+        target_user = session.user
         current = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
     try:
         await system.inherit(current, await system.get_role(name))
@@ -186,9 +188,9 @@ async def add_inherit(name: str, user: Match[At], current: UserOwner, session: U
     True,
     parameterless=[depends_permission("command.permission.inherit", default_available=False)],
 )
-async def cancel_inherit(name: str, user: Match[At], current: UserOwner, session: Uninfo):
+async def cancel_inherit(name: str, user: Match[At], current: UserOwner, session: UserSession):
     if user.available:
-        target_user = await get_user(session.scope, user.result.target)
+        target_user = session.user
         current = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
     try:
         await system.cancel_inherit(current, await system.get_role(name))

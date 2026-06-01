@@ -115,13 +115,13 @@ files = [
 
 [[package]]
 name = "arclet-cithun"
-version = "1.3.0"
+version = "1.3.2"
 requires_python = ">=3.10"
 summary = "A permission system modeled on the file permission system under Unix."
 groups = ["default"]
 files = [
-    {file = "arclet_cithun-1.3.0-py3-none-any.whl", hash = "sha256:2d4df998708e87a8efa4deace8a6942ce25ee4c4736dee41231f86f140089b3f"},
-    {file = "arclet_cithun-1.3.0.tar.gz", hash = "sha256:031685d47921b23cfbf688ad3cd9484c1fc82e831eb9e67b7622ad7cf291da61"},
+    {file = "arclet_cithun-1.3.2-py3-none-any.whl", hash = "sha256:866deda069396a4d8acdeacbc25ba93b0990c83d6e5dfcd5b3704273a087bf1d"},
+    {file = "arclet_cithun-1.3.2.tar.gz", hash = "sha256:129f8e74c0bdc65a26c61959128e11725b65070189173666a00bba8060cd65fe"},
 ]
 
 [[package]]
