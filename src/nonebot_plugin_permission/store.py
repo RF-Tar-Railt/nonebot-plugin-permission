@@ -145,7 +145,7 @@ class ORMStore(AsyncStore):
 
     async def _add_acl(self, acl: AclEntry):
         await self.loaded.wait()
-        async with get_session() as session:
+        async with get_session() as session, session.begin():
             target = await session.scalar(
                 select(AclEntryModel)
                 .where(AclEntryModel.subject_type == acl.subject_type)
@@ -154,17 +154,17 @@ class ORMStore(AsyncStore):
             )
             if target:
                 return
-            async with session.begin_nested():
-                acl_model = AclEntryModel(
-                    subject_type=acl.subject_type,
-                    subject_id=acl.subject_id,
-                    resource_id=acl.resource_id,
-                    allow_mask=int(acl.allow_mask),
-                    deny_mask=int(acl.deny_mask),
-                )
-                session.add(acl_model)
-            await session.refresh(acl_model)
-            self.acls[acl_model.id] = acl
+            acl_model = AclEntryModel(
+                subject_type=acl.subject_type,
+                subject_id=acl.subject_id,
+                resource_id=acl.resource_id,
+                allow_mask=int(acl.allow_mask),
+                deny_mask=int(acl.deny_mask),
+            )
+            session.add(acl_model)
+            await session.flush()
+            acl_id = acl_model.id
+        self.acls[acl_id] = acl
 
     async def get_primary_acl(
         self,
