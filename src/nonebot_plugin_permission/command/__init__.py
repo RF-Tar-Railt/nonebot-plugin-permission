@@ -33,7 +33,7 @@ __plugin_meta__ = PluginMetadata(
     type="application",
     config=Config,
     supported_adapters=inherit_supported_adapters(
-        "nonebot_plugin_alconna", "nonebot_plugin_user", "nonebot_plugin_permission"
+        "nonebot_plugin_alconna", "nonebot_plugin_orm", "nonebot_plugin_user"
     ),
     extra={
         "author": "RF-Tar-Railt",
