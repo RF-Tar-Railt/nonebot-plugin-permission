@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:42fa4f64c854719727d7a65c3eb94587e81bd1f0fc4efd7668403feb78c8e5b3"
+content_hash = "sha256:026e25786e34c82fd4643ae16d055ab56e8c22c64e3e17904cacd1926e2c567c"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -928,7 +928,7 @@ files = [
 
 [[package]]
 name = "nonebot-plugin-uninfo"
-version = "0.10.1"
+version = "0.11.0"
 requires_python = ">=3.10"
 summary = "Universal Information Model for Nonebot2"
 groups = ["default"]
@@ -937,26 +937,26 @@ dependencies = [
     "nonebot2>=2.4.2",
 ]
 files = [
-    {file = "nonebot_plugin_uninfo-0.10.1-py3-none-any.whl", hash = "sha256:3e5952af14e46cbf8e72920d995ac43aa491d9e9048285bd69901c5bd28dea9f"},
-    {file = "nonebot_plugin_uninfo-0.10.1.tar.gz", hash = "sha256:cdd6acbeb235d5617b5d5feb232160f5815fb5b5c74cff6d71cb5dfd415855ce"},
+    {file = "nonebot_plugin_uninfo-0.11.0-py3-none-any.whl", hash = "sha256:6caaa73a4b8403143ab736ff647c5155439915e97997b1416ea6c1c5bd0d3702"},
+    {file = "nonebot_plugin_uninfo-0.11.0.tar.gz", hash = "sha256:3c1f35b72affa0eab0d27e578157e31c9b15706476fcf98e3437d958c4b573fe"},
 ]
 
 [[package]]
 name = "nonebot-plugin-user"
-version = "0.5.3"
-requires_python = ">=3.9"
+version = "0.6.0"
+requires_python = ">=3.10"
 summary = "适用于 Nonebot2 的用户插件"
 groups = ["default"]
 dependencies = [
     "expiringdictx>=1.1.0",
-    "nonebot-plugin-alconna>=0.37.1",
-    "nonebot-plugin-orm>=0.7.0",
-    "nonebot-plugin-uninfo>=0.7.3",
-    "nonebot2>=2.2.0",
+    "nonebot-plugin-alconna>=0.62.0",
+    "nonebot-plugin-orm>=0.8.3",
+    "nonebot-plugin-uninfo>=0.11.0",
+    "nonebot2>=2.5.0",
 ]
 files = [
-    {file = "nonebot_plugin_user-0.5.3-py3-none-any.whl", hash = "sha256:c41ff5c3bf3f9b1a5e9ffd73ef4df61876a2b0a32e52ecca5c60103cf4e23118"},
-    {file = "nonebot_plugin_user-0.5.3.tar.gz", hash = "sha256:67288a0badd775af693d95eb2cbe6924925ad5f24b94b72afde6e0376c01506a"},
+    {file = "nonebot_plugin_user-0.6.0-py3-none-any.whl", hash = "sha256:3768ab8b884e469e5460136d3f230cf0e4854a4954ffd02216c6f13134ef9b85"},
+    {file = "nonebot_plugin_user-0.6.0.tar.gz", hash = "sha256:1fb595dc2f1826aed216097a27b971b1d374ba42531a4bbe37e5ce9366c5d429"},
 ]
 
 [[package]]
