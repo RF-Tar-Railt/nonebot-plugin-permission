@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:026e25786e34c82fd4643ae16d055ab56e8c22c64e3e17904cacd1926e2c567c"
+content_hash = "sha256:efa79aa96c36f22f3d578cb14c714790b45db47f5b7254244091cc2c5effb305"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -115,13 +115,13 @@ files = [
 
 [[package]]
 name = "arclet-cithun"
-version = "1.3.2"
+version = "1.4.0"
 requires_python = ">=3.10"
 summary = "A permission system modeled on the file permission system under Unix."
 groups = ["default"]
 files = [
-    {file = "arclet_cithun-1.3.2-py3-none-any.whl", hash = "sha256:866deda069396a4d8acdeacbc25ba93b0990c83d6e5dfcd5b3704273a087bf1d"},
-    {file = "arclet_cithun-1.3.2.tar.gz", hash = "sha256:129f8e74c0bdc65a26c61959128e11725b65070189173666a00bba8060cd65fe"},
+    {file = "arclet_cithun-1.4.0-py3-none-any.whl", hash = "sha256:b555c804d7b067e63c4fab90ff744be8a1d471569a0f265c9c3b4d39df333db2"},
+    {file = "arclet_cithun-1.4.0.tar.gz", hash = "sha256:8cafb4591c798f05906ce8827eaf19661bc3e2dae4d754db89c1351ab6fea275"},
 ]
 
 [[package]]

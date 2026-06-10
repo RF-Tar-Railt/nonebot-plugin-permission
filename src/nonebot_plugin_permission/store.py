@@ -10,9 +10,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import select
 
 from .model import (
-    AclDependencyModel,
     AclEntryModel,
-    ResourceModel,
     RoleInheritsModel,
     RoleModel,
     TrackLevelModel,
@@ -37,7 +35,6 @@ class ORMStore(AsyncStore):
         self._predefine_tracks = []
         self._predefine_track_levels = []
         self._predefine_assigns = []
-        self._predefine_depends = []
 
         self._hooks = []
 
@@ -104,19 +101,6 @@ class ORMStore(AsyncStore):
             self.tracks[tid] = track
             return track
 
-    async def _add_resource(self, res: ResourceNode):
-        await self.loaded.wait()
-        self.resources[res.id] = res
-        async with get_session() as session, session.begin() as _:
-            resource_model = ResourceModel(
-                id=res.id,
-                name=res.name,
-                parent_id=res.parent_id,
-                inherit_mode=res.inherit_mode,
-                type=res.type,
-            )
-            session.add(resource_model)
-
     async def get_resource(self, rid: str) -> ResourceNode:
         # async with get_session() as session:
         #     resource_model = await session.get(ResourceModel, rid)
@@ -166,7 +150,7 @@ class ORMStore(AsyncStore):
             acl_id = acl_model.id
         self.acls[acl_id] = acl
 
-    async def get_primary_acl(
+    async def get_acl(
         self,
         subject: User | Role,
         resource_id: str,
@@ -182,61 +166,11 @@ class ORMStore(AsyncStore):
             if target:
                 return self.acls[target.id]
 
-    async def get_acl(self, subject: User | Role, resource_id: str) -> list[AclEntry]:
-        await self.loaded.wait()
-        result = []
-        async with get_session() as session:
-            acls = (
-                await session.scalars(
-                    select(AclEntryModel)
-                    .where(AclEntryModel.subject_type == subject.type)
-                    .where(AclEntryModel.subject_id == subject.id)
-                    .where(AclEntryModel.resource_id == resource_id)
-                )
-            ).all()
-            for acl_model in acls:
-                result.append(self.acls[acl_model.id])
-        return result
-
     async def iter_acls_for_resource(self, resource_id: str) -> Iterable[AclEntry]:
         await self.loaded.wait()
         async with get_session() as session:
             acls = (await session.scalars(select(AclEntryModel).where(AclEntryModel.resource_id == resource_id))).all()
             return (self.acls[acl_model.id] for acl_model in acls)
-
-    async def depend(
-        self,
-        target_subject: User | Role,
-        target_resource_id: str,
-        dep_subject: User | Role,
-        dep_resource_path: str,
-        required_mask: Permission,
-    ) -> AclEntry:
-        await self.loaded.wait()
-        async with get_session() as session:
-            target = await session.scalar(
-                select(AclEntryModel)
-                .where(AclEntryModel.subject_type == target_subject.type)
-                .where(AclEntryModel.subject_id == target_subject.id)
-                .where(AclEntryModel.resource_id == target_resource_id)
-            )
-            if not target:
-                raise ValueError("Target ACL does not exist.")
-            target_acl = self.acls[target.id]
-            dep_res = await self.define(dep_resource_path)
-            async with session.begin():
-                dep_model = AclDependencyModel(
-                    dep_subject_type=dep_subject.type,
-                    dep_subject_id=dep_subject.id,
-                    dep_resource_id=dep_res.id,
-                    required_mask=int(required_mask),
-                )
-                dep = dep_model.dump()
-                if dep in target_acl.dependencies:
-                    return target_acl
-                target_acl.dependencies.append(dep)
-                target.dependencies.append(dep_model)
-                return target_acl
 
     async def inherit(self, child: User | Role, parent: Role):
         await self.loaded.wait()
@@ -422,13 +356,7 @@ class ORMStore(AsyncStore):
                     )
                 ).all()
                 role.parent_role_ids.extend(parent_role_ids)
-            resources = (await session.scalars(select(ResourceModel))).all()
-            for resource_model in resources:
-                resource = resource_model.dump()
-                self.resources[resource.id] = resource
-            acls = (
-                await session.scalars(select(AclEntryModel).options(selectinload(AclEntryModel.dependencies)))
-            ).all()
+            acls = (await session.scalars(select(AclEntryModel))).all()
             for acl_model in acls:
                 acl = acl_model.dump()
                 self.acls[acl_model.id] = acl
@@ -474,8 +402,6 @@ class ORMStore(AsyncStore):
                 await session.commit()
         for subject, resource_path, allow_mask, deny_mask in self._predefine_assigns:
             await self.assign(subject, resource_path, allow_mask, deny_mask)
-        for slot in self._predefine_depends:
-            await self.depend(*slot)
         for hook in self._hooks:
             await hook()
 
@@ -522,15 +448,3 @@ class ORMStore(AsyncStore):
         deny_mask: Permission = Permission.NONE,
     ):
         self._predefine_assigns.append((subject, resource_path, allow_mask, deny_mask))
-
-    def pre_depend(
-        self,
-        target_subject: User | Role,
-        target_resource_path: str | Callable[[str], bool] | Pattern[str],
-        dep_subject: User | Role,
-        dep_resource_path: str | Callable[[str], bool] | Pattern[str],
-        required_mask: Permission,
-    ):
-        self._predefine_depends.append(
-            (target_subject, target_resource_path, dep_subject, dep_resource_path, required_mask)
-        )

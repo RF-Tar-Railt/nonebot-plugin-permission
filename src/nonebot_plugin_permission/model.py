@@ -1,9 +1,6 @@
 from arclet.cithun.model import (
-    AclDependency,
     AclEntry,
-    InheritMode,
     Permission,
-    ResourceNode,
     Role,
     SubjectType,
     Track,
@@ -42,39 +39,13 @@ class RoleInheritsModel(Model):
     parent_role_id: Mapped[str] = mapped_column(ForeignKey(RoleModel.id, ondelete="CASCADE"), primary_key=True)
 
 
-class ResourceModel(Model):
-    id: Mapped[str] = mapped_column(String(256), primary_key=True)
-    name: Mapped[str] = mapped_column(String(256), nullable=False)
-    parent_id: Mapped[str | None] = mapped_column(
-        ForeignKey("nonebot_plugin_permission_resourcemodel.id", ondelete="CASCADE"), nullable=True
-    )
-    inherit_mode: Mapped[InheritMode] = mapped_column(String(32), nullable=False, default=InheritMode.MERGE.value)
-    type: Mapped[str] = mapped_column(String(64), nullable=False, default="GENERIC")  # FILE / DIR / PROJECT / etc.
-
-    def dump(self):
-        return ResourceNode(
-            id=self.id,
-            name=self.name,
-            parent_id=self.parent_id,
-            inherit_mode=InheritMode(self.inherit_mode),
-            type=self.type,
-        )
-
-    parent: Mapped["ResourceModel | None"] = relationship("ResourceModel", back_populates="children", remote_side=[id])
-    children: Mapped[list["ResourceModel"]] = relationship(back_populates="parent")
-
-
 class AclEntryModel(Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_type: Mapped[SubjectType] = mapped_column(String(16), nullable=False)  # 'USER' or 'ROLE'
     subject_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    resource_id: Mapped[str] = mapped_column(ForeignKey(ResourceModel.id, ondelete="CASCADE"), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String, nullable=False)
     allow_mask: Mapped[int] = mapped_column(Integer, nullable=False)
     deny_mask: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    dependencies: Mapped[list["AclDependencyModel"]] = relationship(
-        "AclDependencyModel", back_populates="acl_entry", cascade="all, delete-orphan"
-    )
 
     def dump(self):
         return AclEntry(
@@ -83,26 +54,6 @@ class AclEntryModel(Model):
             resource_id=self.resource_id,
             allow_mask=Permission(self.allow_mask),
             deny_mask=Permission(self.deny_mask),
-            dependencies=[dep.dump() for dep in self.dependencies],
-        )
-
-
-class AclDependencyModel(Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    acl_id: Mapped[int] = mapped_column(ForeignKey(AclEntryModel.id, ondelete="CASCADE"), nullable=False)
-    dep_subject_type: Mapped[SubjectType] = mapped_column(String(16), nullable=False)  # 'USER' or 'ROLE'
-    dep_subject_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    dep_resource_id: Mapped[str] = mapped_column(ForeignKey(ResourceModel.id, ondelete="CASCADE"), nullable=False)
-    required_mask: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    acl_entry: Mapped[AclEntryModel] = relationship(AclEntryModel, back_populates="dependencies")
-
-    def dump(self):
-        return AclDependency(
-            subject_type=SubjectType(self.dep_subject_type),
-            subject_id=self.dep_subject_id,
-            resource_id=self.dep_resource_id,
-            required_mask=Permission(self.required_mask),
         )
 
 

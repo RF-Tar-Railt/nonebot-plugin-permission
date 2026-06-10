@@ -200,8 +200,4 @@ async def cancel_inherit(name: str, user: Match[At], current: UserOwner, session
 
 
 system.pre_assign(SUPER_USER, "command.permission.*", Permission("vma"))
-
-
-@system.attach("command.permission")
-async def _(*args):
-    return Permission(7)
+system.pre_assign(system.default_role, "command.permission", Permission("vma"))
