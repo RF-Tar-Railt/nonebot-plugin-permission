@@ -25,6 +25,7 @@ class ORMStore(AsyncStore):
         self.loaded = asyncio.Event()
         self.resources: dict[str, ResourceNode] = {}
         self.users: dict[str, User] = {}
+        self._user_locks: dict[str, asyncio.Lock] = {}
         self.roles: dict[str, Role] = {"group:default": Role("group:default", "Default")}
         self.acls: dict[int, AclEntry] = {}
         self.tracks: dict[str, Track] = {}
@@ -46,15 +47,18 @@ class ORMStore(AsyncStore):
         await self.loaded.wait()
         if uid in self.users:
             return self.users[uid]
-        async with get_session() as session:
-            async with session.begin():
-                user_model = UserModel(id=uid, name=name)
-                session.add(user_model)
-            await session.refresh(user_model)
-            user = user_model.dump()
-        self.users[uid] = user
-        await self.inherit(user, self.default_role)
-        return user
+        async with self._user_locks.setdefault(uid, asyncio.Lock()):
+            if uid in self.users:
+                return self.users[uid]
+            async with get_session() as session:
+                async with session.begin():
+                    user_model = UserModel(id=uid, name=name)
+                    session.add(user_model)
+                await session.refresh(user_model)
+                user = user_model.dump()
+            self.users[uid] = user
+            await self.inherit(user, self.default_role)
+            return user
 
     async def get_or_create_user(self, uid: str, name: str) -> User:
         await self.loaded.wait()
