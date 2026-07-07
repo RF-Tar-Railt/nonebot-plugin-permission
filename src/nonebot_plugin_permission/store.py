@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Hashable, Iterable
 from re import Pattern
 
 from arclet.cithun import InheritMode, ResourceNode, Role, User
@@ -25,7 +25,10 @@ class ORMStore(AsyncStore):
         self.loaded = asyncio.Event()
         self.resources: dict[str, ResourceNode] = {}
         self.users: dict[str, User] = {}
-        self._user_locks: dict[str, asyncio.Lock] = {}
+        self._user_locks: dict[Hashable, asyncio.Lock] = {}
+        self._acl_locks: dict[Hashable, asyncio.Lock] = {}
+        self._role_inherit_locks: dict[Hashable, asyncio.Lock] = {}
+        self._user_role_locks: dict[Hashable, asyncio.Lock] = {}
         self.roles: dict[str, Role] = {"group:default": Role("group:default", "Default")}
         self.acls: dict[int, AclEntry] = {}
         self.tracks: dict[str, Track] = {}
@@ -43,11 +46,19 @@ class ORMStore(AsyncStore):
     def default_role(self) -> Role:
         return self.roles["group:default"]
 
+    @staticmethod
+    def _get_lock(locks: dict[Hashable, asyncio.Lock], key: Hashable) -> asyncio.Lock:
+        lock = locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            locks[key] = lock
+        return lock
+
     async def create_user(self, uid: str, name: str) -> User:
         await self.loaded.wait()
         if uid in self.users:
             return self.users[uid]
-        async with self._user_locks.setdefault(uid, asyncio.Lock()):
+        async with self._get_lock(self._user_locks, uid):
             if uid in self.users:
                 return self.users[uid]
             async with get_session() as session:
@@ -101,7 +112,7 @@ class ORMStore(AsyncStore):
                 track_model = TrackModel(id=tid, name=name or tid)
                 session.add(track_model)
             await session.refresh(track_model)
-            track = track_model.dump()
+            track = Track(id=track_model.id, name=track_model.name)
             self.tracks[tid] = track
             return track
 
@@ -133,26 +144,28 @@ class ORMStore(AsyncStore):
 
     async def _add_acl(self, acl: AclEntry):
         await self.loaded.wait()
-        async with get_session() as session, session.begin():
-            target = await session.scalar(
-                select(AclEntryModel)
-                .where(AclEntryModel.subject_type == acl.subject_type)
-                .where(AclEntryModel.subject_id == acl.subject_id)
-                .where(AclEntryModel.resource_id == acl.resource_id)
-            )
-            if target:
-                return
-            acl_model = AclEntryModel(
-                subject_type=acl.subject_type,
-                subject_id=acl.subject_id,
-                resource_id=acl.resource_id,
-                allow_mask=int(acl.allow_mask),
-                deny_mask=int(acl.deny_mask),
-            )
-            session.add(acl_model)
-            await session.flush()
-            acl_id = acl_model.id
-        self.acls[acl_id] = acl
+        async with self._get_lock(self._acl_locks, acl.identity):
+            async with get_session() as session, session.begin():
+                target = await session.scalar(
+                    select(AclEntryModel)
+                    .where(AclEntryModel.subject_type == acl.subject_type)
+                    .where(AclEntryModel.subject_id == acl.subject_id)
+                    .where(AclEntryModel.resource_id == acl.resource_id)
+                )
+                if target:
+                    self.acls.setdefault(target.id, target.dump())
+                    return
+                acl_model = AclEntryModel(
+                    subject_type=acl.subject_type,
+                    subject_id=acl.subject_id,
+                    resource_id=acl.resource_id,
+                    allow_mask=int(acl.allow_mask),
+                    deny_mask=int(acl.deny_mask),
+                )
+                session.add(acl_model)
+                await session.flush()
+                acl_id = acl_model.id
+            self.acls[acl_id] = acl
 
     async def get_acl(
         self,
@@ -168,53 +181,68 @@ class ORMStore(AsyncStore):
                 .where(AclEntryModel.resource_id == resource_id)
             )
             if target:
-                return self.acls[target.id]
+                acl = self.acls.get(target.id)
+                if acl is None:
+                    acl = target.dump()
+                    self.acls[target.id] = acl
+                return acl
 
     async def iter_acls_for_resource(self, resource_id: str) -> Iterable[AclEntry]:
         await self.loaded.wait()
         async with get_session() as session:
             acls = (await session.scalars(select(AclEntryModel).where(AclEntryModel.resource_id == resource_id))).all()
-            return (self.acls[acl_model.id] for acl_model in acls)
+            result = []
+            for acl_model in acls:
+                acl = self.acls.get(acl_model.id)
+                if acl is None:
+                    acl = acl_model.dump()
+                    self.acls[acl_model.id] = acl
+                result.append(acl)
+            return result
 
     async def inherit(self, child: User | Role, parent: Role):
         await self.loaded.wait()
         if isinstance(child, Role):
             child_role = self._ensure_role(child)
             self._ensure_role(parent)
-            if parent.id not in child_role.parent_role_ids:
-                async with get_session() as session, session.begin() as _:
-                    role_inherit_model = RoleInheritsModel(role_id=child_role.id, parent_role_id=parent.id)
-                    session.add(role_inherit_model)
-                child_role.parent_role_ids.append(parent.id)
+            async with self._get_lock(self._role_inherit_locks, child_role.id):
+                if parent.id not in child_role.parent_role_ids:
+                    async with get_session() as session, session.begin() as _:
+                        role_inherit_model = RoleInheritsModel(role_id=child_role.id, parent_role_id=parent.id)
+                        session.add(role_inherit_model)
+                    child_role.parent_role_ids.append(parent.id)
         else:
             user = self._ensure_user(child)
             self._ensure_role(parent)
-            if parent.id not in user.role_ids:
-                async with get_session() as session, session.begin() as _:
-                    user_roles_model = UserRolesModel(user_id=user.id, role_id=parent.id)
-                    session.add(user_roles_model)
-                user.role_ids.append(parent.id)
+            async with self._get_lock(self._user_role_locks, user.id):
+                if parent.id not in user.role_ids:
+                    async with get_session() as session, session.begin() as _:
+                        user_roles_model = UserRolesModel(user_id=user.id, role_id=parent.id)
+                        session.add(user_roles_model)
+                    user.role_ids.append(parent.id)
 
     async def cancel_inherit(self, child: User | Role, parent: Role):
         await self.loaded.wait()
         if isinstance(child, Role):
             child_role = self._ensure_role(child)
             self._ensure_role(parent)
-            if parent.id in child_role.parent_role_ids:
-                async with get_session() as session, session.begin() as _:
-                    role_inherit_model = await session.get(RoleInheritsModel, (child_role.id, parent.id))
-                    if role_inherit_model:
-                        await session.delete(role_inherit_model)
-                child_role.parent_role_ids.remove(parent.id)
+            async with self._get_lock(self._role_inherit_locks, child_role.id):
+                if parent.id in child_role.parent_role_ids:
+                    async with get_session() as session, session.begin() as _:
+                        role_inherit_model = await session.get(RoleInheritsModel, (child_role.id, parent.id))
+                        if role_inherit_model:
+                            await session.delete(role_inherit_model)
+                    child_role.parent_role_ids.remove(parent.id)
         else:
             user = self._ensure_user(child)
             self._ensure_role(parent)
-            if parent.id in user.role_ids:
-                async with get_session() as session, session.begin() as _:
-                    user_roles_model = await session.get(UserRolesModel, (user.id, parent.id))
-                    if user_roles_model:
-                        await session.delete(user_roles_model)
-                user.role_ids.remove(parent.id)
+            async with self._get_lock(self._user_role_locks, user.id):
+                if parent.id in user.role_ids:
+                    async with get_session() as session, session.begin() as _:
+                        user_roles_model = await session.get(UserRolesModel, (user.id, parent.id))
+                        if user_roles_model:
+                            await session.delete(user_roles_model)
+                    user.role_ids.remove(parent.id)
 
     async def add_track_level(self, track: Track, role: Role, name: str | None = None) -> None:
         await self.loaded.wait()
