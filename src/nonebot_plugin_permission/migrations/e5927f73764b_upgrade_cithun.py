@@ -177,9 +177,9 @@ def upgrade(name: str = "") -> None:
         info={"bind_key": "nonebot_plugin_permission"},
     )
     op.drop_table("nonebot_plugin_permission_ownerpermissionmodel")
+    op.drop_table("nonebot_plugin_permission_ownerinheritsmodel")
     op.drop_table("nonebot_plugin_permission_dependencymodel")
     op.drop_table("nonebot_plugin_permission_ownermodel")
-    op.drop_table("nonebot_plugin_permission_ownerinheritsmodel")
     op.drop_table("nonebot_plugin_permission_permissionmodel")
     # ### end Alembic commands ###
 
