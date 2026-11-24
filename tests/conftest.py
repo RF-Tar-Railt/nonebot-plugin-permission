@@ -35,7 +35,7 @@ def pytest_configure(config: pytest.Config) -> None:
         "sqlalchemy_engine_options": {"poolclass": pool_class},
         "driver": "~fastapi",
         "alembic_startup_check": False,
-        "permission_load_command": False,
+        "permission_load_command": True,
         "permission_superusers": [],
     }
     config.stash[NONEBOT_START_LIFESPAN] = False

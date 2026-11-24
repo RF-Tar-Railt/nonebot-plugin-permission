@@ -12,9 +12,9 @@ require("nonebot_plugin_alconna")
 require("nonebot_plugin_user")
 
 from nonebot_plugin_alconna import At, Match, on_alconna
-from nonebot_plugin_user import UserSession
+from nonebot_plugin_user import UserSession, get_user
 
-from nonebot_plugin_permission import SUPER_USER, UserOwner, depends_permission, system
+from nonebot_plugin_permission import SUPER_USER, CithunUser, UserOwner, depends_permission, system
 
 from .config import Config
 
@@ -96,15 +96,22 @@ perm.shortcut(
 )
 
 
+async def get_target(user: Match[At], current: UserOwner, session: UserSession) -> CithunUser:
+    """解析指令作用的目标用户，省略 At 时为指令发送者"""
+    if not user.available:
+        return current
+    at = user.result
+    if at.flag != "user":
+        await perm.finish(f"Only user mention is supported, got {at.flag}")
+    target = await get_user(session.session.scope, at.target)
+    return await system.get_or_create_user(f"user:{target.id}", target.name)
+
+
 @perm.assign("user.list", parameterless=[depends_permission("command.permission.list")])
 async def list_permissions(user: Match[At], current: UserOwner, session: UserSession):
-    if user.available:
-        target_user = session.user
-        _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
-    else:
-        _target = current
+    target = await get_target(user, current, session)
     try:
-        await perm.finish(await system.permission_on(_target))
+        await perm.finish(await system.permission_on(target))
     except PermissionDeniedError as e:
         await perm.finish(str(e))
 
@@ -125,46 +132,31 @@ async def set_permission(
     available = mask & Permission.AVAILABLE == Permission.AVAILABLE
     if mode == "-":
         available = not available
-    if user.available:
-        target_user = session.user
-        _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
-        try:
+    target = await get_target(user, current, session)
+    try:
+        if user.available:
             await system.set(
-                current, _target, permission, mask, mode, deny, context={"event": event, "bot": bot, "session": session}
+                current, target, permission, mask, mode, deny, context={"event": event, "bot": bot, "session": session}
             )
-            await perm.finish(
-                f"Permission {permission} {'enabled' if available else 'disabled'} for user:{target_user.id}"
-            )
-        except ResourceNotFoundError:
-            await perm.finish(f"Permission {permission} not found")
-        except PermissionDeniedError as e:
-            await perm.finish(str(e))
-    else:
-        try:
+        else:
             await system.suset(current, permission, mask, mode, deny)
-            await perm.finish(f"Permission {permission} {'enabled' if available else 'disabled'} for {current.name}")
-        except ResourceNotFoundError:
-            await perm.finish(f"Permission {permission} not found")
+        await perm.finish(f"Permission {permission} {'enabled' if available else 'disabled'} for {target.name}")
+    except ResourceNotFoundError:
+        await perm.finish(f"Permission {permission} not found")
+    except PermissionDeniedError as e:
+        await perm.finish(str(e))
 
 
 @perm.assign("user.get", parameterless=[depends_permission("command.permission.get")])
 async def get_permission(permission: str, user: Match[At], current: UserOwner, session: UserSession, event, bot):
-    if user.available:
-        target_user = session.user
-        _target = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
-        try:
-            state = await system.get(_target, permission, context={"event": event, "bot": bot, "session": session})
-            await perm.finish(f"Permission {permission} for user:{target_user.id} is {Permission(state)!r}")
-        except ResourceNotFoundError:
-            await perm.finish(f"Permission {permission} not found")
-        except PermissionDeniedError as e:
-            await perm.finish(str(e))
-    else:
-        try:
-            state = await system.get(current, permission, context={"event": event, "bot": bot, "session": session})
-            await perm.finish(f"Permission {permission} for {current.name} is {Permission(state)!r}")
-        except ResourceNotFoundError:
-            await perm.finish(f"Permission {permission} not found")
+    target = await get_target(user, current, session)
+    try:
+        state = await system.get(target, permission, context={"event": event, "bot": bot, "session": session})
+        await perm.finish(f"Permission {permission} for {target.name} is {Permission(state)!r}")
+    except ResourceNotFoundError:
+        await perm.finish(f"Permission {permission} not found")
+    except PermissionDeniedError as e:
+        await perm.finish(str(e))
 
 
 @perm.assign(
@@ -173,14 +165,12 @@ async def get_permission(permission: str, user: Match[At], current: UserOwner, s
     parameterless=[depends_permission("command.permission.inherit", default_available=False)],
 )
 async def add_inherit(name: str, user: Match[At], current: UserOwner, session: UserSession):
-    if user.available:
-        target_user = session.user
-        current = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
+    target = await get_target(user, current, session)
     try:
-        await system.inherit(current, await system.get_role(name))
+        await system.inherit(target, await system.get_role(name))
     except KeyError:
         await perm.finish(f"Role {name} not found")
-    await perm.finish(f"{current.name} inherit {name} success")
+    await perm.finish(f"{target.name} inherit {name} success")
 
 
 @perm.assign(
@@ -189,14 +179,12 @@ async def add_inherit(name: str, user: Match[At], current: UserOwner, session: U
     parameterless=[depends_permission("command.permission.inherit", default_available=False)],
 )
 async def cancel_inherit(name: str, user: Match[At], current: UserOwner, session: UserSession):
-    if user.available:
-        target_user = session.user
-        current = await system.get_or_create_user(f"user:{target_user.id}", target_user.name)
+    target = await get_target(user, current, session)
     try:
-        await system.cancel_inherit(current, await system.get_role(name))
+        await system.cancel_inherit(target, await system.get_role(name))
     except KeyError:
         await perm.finish(f"Role {name} not found")
-    await perm.finish(f"{current.name} cancel inherit {name} success")
+    await perm.finish(f"{target.name} cancel inherit {name} success")
 
 
 system.pre_assign(SUPER_USER, "command.permission.*", Permission("vma"))
